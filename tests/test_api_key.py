@@ -133,6 +133,113 @@ class ConfigHomeTest(unittest.TestCase):
                 load_env()
                 self.assertEqual(os.environ.get(API_KEY_ENV), "sk-home")
 
+    def test_load_env_copies_legacy_config_dir(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            root = temporary / "root"
+            legacy = home / ".config" / "edittude-v3"
+            root.mkdir()
+            legacy.mkdir(parents=True)
+            (legacy / ".env").write_text(
+                f"{API_KEY_ENV}=sk-old\nEDITTUDE_MODEL=deepseek:other\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"EDITTUDE_ROOT": str(root)}, clear=False):
+                os.environ.pop("EDITTUDE_CONFIG_HOME", None)
+                os.environ.pop(API_KEY_ENV, None)
+                with patch("edittude_v3.paths.Path.home", return_value=home):
+                    load_env()
+                    try:
+                        self.assertEqual(os.environ.get(API_KEY_ENV), "sk-old")
+                        copied = home / ".config" / "edittude" / ".env"
+                        text = copied.read_text(encoding="utf-8")
+                        self.assertIn("sk-old", text)
+                        self.assertIn("EDITTUDE_MODEL=deepseek:other", text)
+                        self.assertEqual(stat.S_IMODE(copied.stat().st_mode), 0o600)
+                        self.assertIn("sk-old", (legacy / ".env").read_text(encoding="utf-8"))
+                    finally:
+                        os.environ.pop(API_KEY_ENV, None)
+
+    def test_empty_new_config_is_replaced_by_legacy(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            root = temporary / "root"
+            root.mkdir()
+            new = home / ".config" / "edittude"
+            old = home / ".config" / "edittude-v3"
+            new.mkdir(parents=True)
+            old.mkdir(parents=True)
+            (new / ".env").write_text("DEEPSEEK_API_KEY=\n", encoding="utf-8")
+            (old / ".env").write_text(f"{API_KEY_ENV}=sk-from-old\n", encoding="utf-8")
+            with patch.dict(os.environ, {"EDITTUDE_ROOT": str(root)}, clear=False):
+                os.environ.pop("EDITTUDE_CONFIG_HOME", None)
+                os.environ.pop(API_KEY_ENV, None)
+                with patch("edittude_v3.paths.Path.home", return_value=home):
+                    load_env()
+                    try:
+                        self.assertEqual(os.environ.get(API_KEY_ENV), "sk-from-old")
+                        self.assertEqual(
+                            (new / ".env").read_text(encoding="utf-8"),
+                            f"{API_KEY_ENV}=sk-from-old\n",
+                        )
+                    finally:
+                        os.environ.pop(API_KEY_ENV, None)
+
+    def test_existing_config_wins_and_keeps_a_missing_key(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            root = temporary / "root"
+            root.mkdir()
+            new = home / ".config" / "edittude"
+            old = home / ".config" / "edittude-v3"
+            new.mkdir(parents=True)
+            old.mkdir(parents=True)
+            (new / ".env").write_text("EDITTUDE_MODEL=deepseek:custom\n", encoding="utf-8")
+            (old / ".env").write_text(
+                f"{API_KEY_ENV}=sk-old\nEDITTUDE_MODEL=deepseek:legacy\n",
+                encoding="utf-8",
+            )
+            with patch.dict(os.environ, {"EDITTUDE_ROOT": str(root)}, clear=False):
+                os.environ.pop("EDITTUDE_CONFIG_HOME", None)
+                os.environ.pop(API_KEY_ENV, None)
+                os.environ.pop("EDITTUDE_MODEL", None)
+                with patch("edittude_v3.paths.Path.home", return_value=home):
+                    load_env()
+                    try:
+                        self.assertEqual(os.environ.get(API_KEY_ENV), "sk-old")
+                        text = (new / ".env").read_text(encoding="utf-8")
+                        self.assertIn("deepseek:custom", text)
+                        self.assertIn("sk-old", text)
+                        self.assertNotIn("deepseek:legacy", text)
+                    finally:
+                        os.environ.pop(API_KEY_ENV, None)
+                        os.environ.pop("EDITTUDE_MODEL", None)
+
+    def test_config_home_override_ignores_legacy_config_dir(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            override = temporary / "override"
+            root = temporary / "root"
+            for path in (override, root):
+                path.mkdir()
+            legacy = home / ".config" / "edittude-v3"
+            legacy.mkdir(parents=True)
+            (legacy / ".env").write_text(f"{API_KEY_ENV}=sk-legacy\n", encoding="utf-8")
+            (override / ".env").write_text("OTHER=1\n", encoding="utf-8")
+            with patch.dict(
+                os.environ,
+                {"EDITTUDE_CONFIG_HOME": str(override), "EDITTUDE_ROOT": str(root)},
+            ):
+                os.environ.pop(API_KEY_ENV, None)
+                with patch("edittude_v3.paths.Path.home", return_value=home):
+                    load_env()
+                    self.assertNotEqual(os.environ.get(API_KEY_ENV), "sk-legacy")
+                    self.assertFalse((home / ".config" / "edittude" / ".env").exists())
+
     def test_load_env_adopts_legacy_install_key(self):
         with tempfile.TemporaryDirectory() as temporary:
             temporary = Path(temporary)

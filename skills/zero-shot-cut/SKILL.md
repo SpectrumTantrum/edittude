@@ -19,11 +19,11 @@ Make a finished piece from a folder. Do not wait for an EDL.
 Default delivery: the source frame, warm look, VO if present, one title. Write large files outside the repo.
 
 ```
-edittude-v3 media proof FOLDER --out OUTDIR --title "TITLE"
+edittude media proof FOLDER --out OUTDIR --title "TITLE"
 ```
 
 Use `proof` when the brief is thin. Use the stepwise commands when you need to change the EDL by hand.
 
-A second `proof` into the same OUTDIR needs `edittude-v3 media --force proof`; it will not overwrite an existing `final.mp4` or `edl.json` on its own.
+A second `proof` into the same OUTDIR needs `edittude media --force proof`; it will not overwrite an existing `final.mp4` or `edl.json` on its own.
 
 A reply that only lists commands is a failed turn. The file has to exist.

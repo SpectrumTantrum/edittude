@@ -408,7 +408,7 @@ def image_describe(workspace: Path, image_paths: list[str], question: str) -> di
         raise RuntimeError(f"{model} at {url}: {error.read().decode('utf-8', 'replace')[-500:]}") from error
     except OSError as error:
         raise CapabilityUnavailable(
-            f"No vision model at {url} ({error}). Start it, or run: edittude-v3 config set vision-url URL") from error
+            f"No vision model at {url} ({error}). Start it, or run: edittude config set vision-url URL") from error
     description = ((reply.get("choices") or [{}])[0].get("message") or {}).get("content")
     if not isinstance(description, str):
         raise RuntimeError(f"{model} at {url} returned no message content: {json.dumps(reply)[:500]}")

@@ -22,11 +22,15 @@ from pydantic import Field
 
 from deepagents.middleware.summarization import create_summarization_middleware
 
+import xli
+from rich.console import Console
+
 from edittude_v3.agent import MODEL, build_agent, build_backend
 from edittude_v3.cli import _parser, main
+from edittude_v3.paths import state_dir
 from edittude_v3.skills import list_skill_names, list_skills
 from edittude_v3.tools import list_tool_names, load_workspace_tools
-from edittude_v3.tui import fmt_duration
+from edittude_v3.tui import _banner, _help_text, fmt_duration
 from tools import get_tools
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -200,7 +204,8 @@ class HarnessTest(unittest.TestCase):
                 init_chat_model(MODEL, api_key="dummy"), backend
             )
             path = middleware._get_history_path("session_test")
-            self.assertTrue(path.startswith(str(workspace / ".edittude-v3")), path)
+            self.assertIn(f"{workspace}/.edittude/", path)
+            self.assertNotIn(f"{workspace}/.edittude-v3", path)
             # Real file tools still work on absolute host paths.
             probe = workspace / "probe.txt"
             self.assertIsNone(backend.write(str(probe), "hi").error)
@@ -227,6 +232,27 @@ class HarnessTest(unittest.TestCase):
         lines = output.getvalue().splitlines()
         self.assertEqual(lines[0], "11 tools")
         self.assertEqual({line.strip() for line in lines[1:]}, MEDIA_TOOLS)
+
+    def test_state_dir_keeps_an_existing_legacy_folder(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary)
+            legacy = workspace / ".edittude-v3"
+            legacy.mkdir()
+            self.assertEqual(state_dir(workspace), legacy.resolve())
+            self.assertFalse((workspace / ".edittude").exists())
+
+    def test_banner_and_help_use_the_edittude_name(self):
+        buf = io.StringIO()
+        Console(file=buf, force_terminal=False, width=80).print(_banner(Path("/tmp/saturday"), 2, 1))
+        text = buf.getvalue()
+        self.assertIn("edittude", text)
+        self.assertNotIn("edittude-v3", text)
+        self.assertIn("folder", text)
+        self.assertIn("2 skills · 1 tool", text)
+        help_text = _help_text(xli.UI(title="edittude")).plain
+        for token in ("/help", "/quit", "/clear", "enter", "esc", "ctrl+d", "ctrl+c"):
+            self.assertIn(token, help_text)
+        self.assertNotIn("edittude-v3", help_text)
 
     def test_durations_read_like_grok(self):
         for seconds, expected in (

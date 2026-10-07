@@ -102,7 +102,7 @@ class FakeUI:
     def reasoning(self, text: str) -> None:
         pass
 
-    def command(self, name, description=""):
+    def command(self, name, description="", aliases=()):
         return lambda function: function
 
     def on_prompt(self, function):
@@ -153,7 +153,7 @@ class HarnessStreamFixesTest(unittest.TestCase):
                 with self.subTest(candidate=candidate.name):
                     with self.assertRaises(SystemExit) as raised:
                         _workspace(candidate)
-                    self.assertEqual(str(raised.exception), f"not a directory: {candidate}")
+                    self.assertEqual(str(raised.exception), f"edittude: not a directory: {candidate}")
             self.assertFalse((root / "typo").exists())
 
     def test_reasoning_reads_the_standard_content_block_key(self):

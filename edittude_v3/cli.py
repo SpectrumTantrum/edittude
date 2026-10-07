@@ -15,7 +15,7 @@ from rich.markup import escape
 from rich.status import Status
 from rich.table import Table
 
-from edittude_v3 import __version__
+from edittude_v3 import APP_NAME, __version__
 from edittude_v3.agent import (
     API_KEY_URL,
     SETTINGS,
@@ -38,6 +38,26 @@ from edittude_v3.tools import list_tool_names
 from edittude_v3.tui import ACCENT, BLUE, GREY, ORANGE, RED, TEAL, run_tui
 
 console = Console()
+err_console = Console(stderr=True)
+
+_HELP = f"""
+examples:
+  {APP_NAME}                                   open a session in this folder
+  {APP_NAME} ask "cut /path/to/footage"        one prompt, then exit
+  {APP_NAME} media inventory DIR --out inventory.json
+  {APP_NAME} -C /path/to/project               session in another folder
+  {APP_NAME} update                            pull the latest install
+
+session:
+  enter send    / commands    @ files    esc interrupt    ctrl+d quit
+""".strip()
+
+
+class _Parser(argparse.ArgumentParser):
+    def error(self, message: str) -> None:
+        self.print_usage(sys.stderr)
+        err_console.print(f"[bold {RED}]{APP_NAME}:[/] {escape(message)}", highlight=False)
+        raise SystemExit(2)
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -47,45 +67,53 @@ def _parser() -> argparse.ArgumentParser:
         "--directory",
         type=Path,
         default=argparse.SUPPRESS,
-        help="workspace directory (default: cwd)",
+        help="workspace directory (default: the current directory)",
     )
     common.add_argument("--thread", default=argparse.SUPPRESS, help="reuse a thread id")
 
-    parser = argparse.ArgumentParser(
-        prog="edittude-v3",
-        description="edittude-v3. Local video-editing agent in the current directory.",
+    parser = _Parser(
+        prog=APP_NAME,
+        description="Local video-editing agent. Open a session, or run one prompt.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog=_HELP,
         parents=[common],
     )
     parser.add_argument(
         "-V",
         "--version",
         action="version",
-        version=f"edittude-v3 {__version__}",
+        version=f"{APP_NAME} {__version__}",
     )
 
-    sub = parser.add_subparsers(dest="command")
-    sub.add_parser("chat", help="interactive session (default)", parents=[common])
+    sub = parser.add_subparsers(dest="command", metavar="command")
+    sub.add_parser("chat", help="open an interactive session (default)", parents=[common])
 
     ask = sub.add_parser("ask", help="run one prompt and exit", parents=[common])
     ask.add_argument("prompt", nargs="+", help="the prompt to send")
 
-    sub.add_parser("skills", help="list skill folders in ./skills", parents=[common])
-    sub.add_parser("tools", help="list callable tools in ./tools", parents=[common])
+    sub.add_parser("skills", help="list skills for this folder", parents=[common])
+    sub.add_parser("tools", help="list tools for this folder", parents=[common])
 
-    config = sub.add_parser("config", help="show or change models and limits")
+    config = sub.add_parser("config", help="show or change model settings")
     config.add_argument("action", nargs="?", choices=("show", "set", "unset"), default="show")
     config.add_argument("name", nargs="?", choices=tuple(SETTINGS))
     config.add_argument("value", nargs="?")
 
-    media = sub.add_parser("media", help="local ffmpeg tools (inventory, cut, mix, qc)")
+    # The footage tools have their own help. This wrapper must not swallow -h.
+    media = sub.add_parser(
+        "media",
+        help="inventory, cut, mix, grade, titles, qc",
+        add_help=False,
+    )
     media.add_argument("--force", action="store_true", help="overwrite existing output files")
+    media.add_argument("-h", "--help", action="store_true", dest="media_help", help=argparse.SUPPRESS)
     media.add_argument(
         "media_args",
         nargs=argparse.REMAINDER,
-        help="arguments forwarded to edittude-media",
+        help="arguments forwarded to the media tools",
     )
 
-    update = sub.add_parser("update", help="pull the latest edittude-v3 into this install")
+    update = sub.add_parser("update", help="update this install")
     update.add_argument(
         "--force",
         action="store_true",
@@ -101,7 +129,7 @@ def _workspace(directory: Path | None) -> Path:
     path = directory.expanduser().resolve()
     # Without this, a typo'd -C creates the whole tree via state_dir() and runs there.
     if not path.is_dir():
-        raise SystemExit(f"not a directory: {path}")
+        raise SystemExit(f"{APP_NAME}: not a directory: {path}")
     return path
 
 
@@ -115,8 +143,9 @@ def ensure_api_key() -> None:
     if not sys.stdin.isatty():
         require_api_key()
     console.print()
-    console.print(f"[{ACCENT}]◆[/] [bold]edittude-v3[/] needs a DeepSeek API key.")
+    console.print(f"[{ACCENT}]◆[/] [bold]{APP_NAME}[/] needs a DeepSeek API key.")
     console.print(f"[dim]Get one at {API_KEY_URL}[/]")
+    console.print(f"[dim]It is saved to {escape(_home(env_file()))}[/]")
     console.print()
     while True:
         try:
@@ -143,7 +172,7 @@ async def _ask_async(prompt: str, workspace: Path, thread: str) -> None:
     parts: list[str] = []
     home = escape(_home(workspace))
     console.print(
-        f"[bold]edittude-v3[/][dim] │ [/][{TEAL}]{model_label()}[/][dim] │ [/][{ORANGE}]{home}[/]"
+        f"[bold]{APP_NAME}[/][dim] │ [/][{TEAL}]{model_label()}[/][dim] │ [/][{ORANGE}]{home}[/]"
     )
     console.print()
 
@@ -181,7 +210,8 @@ def cmd_ask(*, workspace: Path, prompt: str, thread: str | None) -> None:
 def cmd_skills(*, workspace: Path) -> None:
     rows = list_skills(workspace)
     if not rows:
-        console.print("[dim]No skills yet. Add folders under skills/<name>/SKILL.md[/]")
+        console.print("[dim]No skills in this folder.[/]")
+        console.print("[dim]Add skills/<name>/SKILL.md[/]")
         return
     console.print(f"[bold]{len(rows)} skill{'' if len(rows) == 1 else 's'}[/]")
     table = Table(box=None, show_header=False, padding=(0, 2, 0, 2))
@@ -195,7 +225,8 @@ def cmd_skills(*, workspace: Path) -> None:
 def cmd_tools(*, workspace: Path) -> None:
     names = list_tool_names(workspace)
     if not names:
-        console.print("[dim]No tools. Add tools/__init__.py exporting get_tools(workspace).[/]")
+        console.print("[dim]No tools in this folder.[/]")
+        console.print("[dim]Add tools/__init__.py exporting get_tools(workspace).[/]")
         return
     console.print(f"[bold]{len(names)} tool{'' if len(names) == 1 else 's'}[/]")
     table = Table(box=None, show_header=False, padding=(0, 2, 0, 2))
@@ -209,12 +240,13 @@ def cmd_config(*, action: str, name: str | None, value: str | None) -> None:
     load_env()
     if action != "show":
         if name is None or (action == "set" and value is None):
-            raise SystemExit("usage: edittude-v3 config set NAME VALUE | config unset NAME")
+            raise SystemExit(f"usage: {APP_NAME} config set NAME VALUE | config unset NAME")
         try:
             set_setting(name, value if action == "set" else None)
         except ValueError as exc:
             raise SystemExit(str(exc)) from None
-    table = Table(show_header=True, header_style=f"bold {ACCENT}")
+    console.print(f"[bold]{APP_NAME}[/] [dim]config[/]")
+    table = Table(show_header=True, header_style=f"bold {ACCENT}", box=None, padding=(0, 2))
     for column in ("setting", "value", "variable"):
         table.add_column(column)
     for setting, current in get_settings().items():
@@ -229,9 +261,9 @@ def cmd_update(*, force: bool = False) -> None:
     installer = root / "install.sh"
     if not installer.is_file():
         console.print(
-            f"[bold {RED}]error[/] no installer at {escape(str(installer))}. "
-            "This copy cannot update itself."
+            f"[bold {RED}]{APP_NAME}:[/] no installer at {escape(str(installer))}."
         )
+        console.print("[dim]This copy cannot update itself.[/]")
         raise SystemExit(1)
     env = os.environ.copy()
     env["EDITTUDE_UPDATE"] = "1"
@@ -270,6 +302,10 @@ def main(argv: list[str] | None = None) -> None:
         media_args = list(args.media_args)
         if media_args and media_args[0] == "--":
             media_args = media_args[1:]
+        if getattr(args, "media_help", False) and not any(
+            arg in {"-h", "--help"} for arg in media_args
+        ):
+            media_args.insert(0, "--help")
         if not media_args:
             media_args = ["--help"]
         if args.force:

@@ -9,7 +9,7 @@ metadata:
 
 # Convert a singing voice
 
-For footage and renders use `uv run edittude-v3 media` (same as `python -m edittude_v3.media`): inventory, thumbs, plan, assemble, mix, grade, titles, captions (needs an ffmpeg with libass), reframe, finish, qc, frames, recut, proof. Do not call `media_inspect` or `media_render`. Other helpers if present: `voice_convert`. Pass the skill's `target_vocal_path` as the callable's `reference_audio_path`.
+For footage and renders use `uv run edittude media` (same as `python -m edittude_v3.media`): inventory, thumbs, plan, assemble, mix, grade, titles, captions (needs an ffmpeg with libass), reframe, finish, qc, frames, recut, proof. Do not call `media_inspect` or `media_render`. Other helpers if present: `voice_convert`. Pass the skill's `target_vocal_path` as the callable's `reference_audio_path`.
 
 Change vocal timbre while retaining the source performance's lyrics, pitch contour, rhythm, and placement. The output is a dry converted vocal stem for mixing.
 

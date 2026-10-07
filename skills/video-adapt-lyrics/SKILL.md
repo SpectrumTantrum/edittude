@@ -9,7 +9,7 @@ metadata:
 
 # Adapt lyrics to an existing melody
 
-For footage and renders use `uv run edittude-v3 media` (same as `python -m edittude_v3.media`): inventory, thumbs, plan, assemble, mix, grade, titles, captions (needs an ffmpeg with libass), reframe, finish, qc, frames, recut, proof. Do not call `media_inspect` or `media_render`.
+For footage and renders use `uv run edittude media` (same as `python -m edittude_v3.media`): inventory, thumbs, plan, assemble, mix, grade, titles, captions (needs an ffmpeg with libass), reframe, finish, qc, frames, recut, proof. Do not call `media_inspect` or `media_render`.
 
 Make the lyric express the requested story while remaining singable on the supplied melody. Keep notes and timing fixed unless the brief explicitly permits musical changes.
 

@@ -8,8 +8,8 @@ description: Review and QC a render. Load for black frames, silence, loudness, f
 Look at what you made.
 
 ```
-edittude-v3 media qc final.mp4 --out qc.json
-edittude-v3 media frames final.mp4 --out frames
+edittude media qc final.mp4 --out qc.json
+edittude media frames final.mp4 --out frames
 ```
 
 Read `qc.json`. Pass means no black spans, no long silences, no freezes, duration over 3s, audio present, integrated loudness near -16 LUFS.
