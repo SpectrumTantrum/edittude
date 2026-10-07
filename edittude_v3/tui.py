@@ -312,7 +312,7 @@ def _dress_composer(app, engine) -> None:
         + [
             ("composer.idle", BORDER),
             ("composer.active", BORDER_ACTIVE),
-            ("placeholder", SUBTLE),
+            ("placeholder", MUTED),
         ]
     )
     # xli leaves prompt_toolkit on 256 colors, which muddies these hexes.

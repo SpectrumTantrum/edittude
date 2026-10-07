@@ -281,7 +281,7 @@ class HarnessTest(unittest.TestCase):
         rules = dict(app.style.style_rules)
         self.assertEqual(rules["composer.idle"], BORDER)
         self.assertEqual(rules["composer.active"], BORDER_ACTIVE)
-        self.assertEqual(rules["placeholder"], "#5E646C")
+        self.assertEqual(rules["placeholder"], "#81868F")
         placeholder = composer.content.input_processors[-1]
         from prompt_toolkit.document import Document
         from prompt_toolkit.layout.processors import TransformationInput
