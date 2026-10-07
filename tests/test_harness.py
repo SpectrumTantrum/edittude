@@ -30,7 +30,19 @@ from edittude_v3.cli import _parser, main
 from edittude_v3.paths import state_dir
 from edittude_v3.skills import list_skill_names, list_skills
 from edittude_v3.tools import list_tool_names, load_workspace_tools
-from edittude_v3.tui import _banner, _help_text, fmt_duration
+from edittude_v3.tui import (
+    BORDER,
+    BORDER_ACTIVE,
+    PLACEHOLDER,
+    PURPLE,
+    PURPLE_BRIGHT,
+    TEXT,
+    THEME,
+    _banner,
+    _dress_composer,
+    _help_text,
+    fmt_duration,
+)
 from tools import get_tools
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -253,6 +265,35 @@ class HarnessTest(unittest.TestCase):
         for token in ("/help", "/quit", "/clear", "enter", "esc", "ctrl+d", "ctrl+c"):
             self.assertIn(token, help_text)
         self.assertNotIn("edittude-v3", help_text)
+
+    def test_oscura_composer_is_a_rounded_box(self):
+        ui = xli.UI(title="edittude", intro="Chronology is the spine.", theme=THEME)
+        app = ui._engine._build_app()
+        _dress_composer(app, ui._engine)
+        children = app.layout.container.children
+        top = "".join(piece for _style, piece in children[1].content.create_content(24, 1).get_line(0))
+        bottom = "".join(piece for _style, piece in children[3].content.create_content(24, 1).get_line(0))
+        self.assertEqual(top, "╭" + "─" * 22 + "╮")
+        self.assertEqual(bottom, "╰" + "─" * 22 + "╯")
+        composer = children[2]
+        self.assertEqual(len(composer.left_margins), 1)
+        self.assertEqual(len(composer.right_margins), 1)
+        rules = dict(app.style.style_rules)
+        self.assertEqual(rules["composer.idle"], BORDER)
+        self.assertEqual(rules["composer.active"], BORDER_ACTIVE)
+        self.assertEqual(rules["placeholder"], "#5E646C")
+        placeholder = composer.content.input_processors[-1]
+        from prompt_toolkit.document import Document
+        from prompt_toolkit.layout.processors import TransformationInput
+
+        empty = TransformationInput(
+            composer.content, Document(), 0, lambda i: i, [], 20, 1, None
+        )
+        shown = "".join(piece for _style, piece in placeholder.apply_transformation(empty).fragments)
+        self.assertEqual(shown, PLACEHOLDER)
+        self.assertEqual(PURPLE, "#9B7ECE")
+        self.assertEqual(PURPLE_BRIGHT, "#C4A7E7")
+        self.assertEqual(TEXT, "#E4E4E4")
 
     def test_durations_read_like_grok(self):
         for seconds, expected in (

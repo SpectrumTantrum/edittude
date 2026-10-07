@@ -35,7 +35,7 @@ from edittude_v3.events import iter_turn, preview
 from edittude_v3.paths import env_file, install_root
 from edittude_v3.skills import list_skills
 from edittude_v3.tools import list_tool_names
-from edittude_v3.tui import ACCENT, BLUE, GREY, ORANGE, RED, TEAL, run_tui
+from edittude_v3.tui import ACCENT, BLUE, MUTED, ORANGE, RED, TEAL, run_tui
 
 console = Console()
 err_console = Console(stderr=True)
@@ -185,14 +185,14 @@ async def _ask_async(prompt: str, workspace: Path, thread: str) -> None:
                 args = payload.get("args") or {}
                 hint = args.get("file_path") or args.get("query") or args.get("command") or ""
                 console.print(
-                    f"  [{GREY}]◆[/] [bold]{name}[/] [dim]{escape(str(hint))}[/]", highlight=False
+                    f"  [{ACCENT}]◆[/] [bold]{name}[/] [dim]{escape(str(hint))}[/]", highlight=False
                 )
             elif kind == "tool_end":
                 out = escape(preview(payload.get("output"), limit=80))
                 if payload.get("status") == "error":
                     console.print(f"  [{RED}]✗ {out}[/]", highlight=False)
                 else:
-                    console.print(f"  [{GREY}]┃[/] [dim]{out}[/]", highlight=False)
+                    console.print(f"  [{MUTED}]┃[/] [dim]{out}[/]", highlight=False)
 
     text = "".join(parts).strip()
     if text:
