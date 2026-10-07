@@ -9,7 +9,7 @@ metadata:
 
 # Time lyrics for a video edit
 
-For footage and renders use `uv run edittude-v3 media` (same as `python -m edittude_v3.media`): inventory, thumbs, plan, assemble, mix, grade, titles, captions (needs an ffmpeg with libass), reframe, finish, qc, frames, recut, proof. Do not call `media_inspect` or `media_render`.
+For footage and renders use `uv run edittude media` (same as `python -m edittude_v3.media`): inventory, thumbs, plan, assemble, mix, grade, titles, captions (needs an ffmpeg with libass), reframe, finish, qc, frames, recut, proof. Do not call `media_inspect` or `media_render`.
 
 Produce explicit lyric and instrumental intervals from the final singing alignment, then verify them against the actual vocal used in the edit.
 

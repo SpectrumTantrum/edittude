@@ -34,10 +34,19 @@ def main(argv: list[str] | None = None) -> None:
         raise SystemExit(str(exc)) from exc
 
 
+def _prog() -> str:
+    invoked = Path(sys.argv[0]).name
+    if invoked == "edittude-media":
+        return "edittude-media"
+    if invoked == "edittude-v3":
+        return "edittude-v3 media"
+    return "edittude media"
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="edittude-media",
-        description="Local ffmpeg tools for inventory, cut, mix, grade, titles, QC.",
+        prog=_prog(),
+        description="Local footage tools. Inventory, cut, mix, grade, titles, QC.",
     )
     parser.add_argument("--force", action="store_true", help="overwrite existing output files")
     sub = parser.add_subparsers(dest="command", required=True)

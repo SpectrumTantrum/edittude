@@ -1,4 +1,4 @@
-# Apple-Silicon-native (MLX) options for the edittude-v3 model backends
+# Apple-Silicon-native (MLX) options for the edittude model backends
 
 Research date: **2026-09-20**. Every version/date/existence claim below was read off a page
 fetched on that date; anything not fetched is marked **UNVERIFIED**. Contract details come from
@@ -362,7 +362,7 @@ def target() -> str:
         return "darwin-arm64"
     if sys.platform.startswith("linux"):
         return "linux-cuda" if _cuda() else "linux-cpu"
-    raise SystemExit("edittude-v3 model backends support macOS arm64 and Linux only")
+    raise SystemExit("edittude model backends support macOS arm64 and Linux only")
 ```
 
 **Do not hand-roll CUDA detection for the torch install.** `_venv()` already shells to

@@ -1,7 +1,7 @@
 [project]
-name = "edittude-v3"
+name = "edittude"
 version = "0.1.0"
-description = "edittude-v3 agent harness"
+description = "Local video-editing agent"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [

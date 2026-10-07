@@ -1,4 +1,4 @@
-# edittude-v3
+# edittude
 
 Video-editing agent. Model is DeepSeek Flash.
 
@@ -7,35 +7,37 @@ It inventories a footage folder, plans a cut, renders with ffmpeg, mixes voiceov
 ## Install
 
 ```bash
-curl -LsSf https://raw.githubusercontent.com/SpectrumTantrum/edittude-v3/main/install.sh | bash
+curl -LsSf https://raw.githubusercontent.com/SpectrumTantrum/edittude/main/install.sh | bash
 ```
 
-That installs `uv` if needed, syncs the project, and puts `edittude-v3` in `~/.local/bin`. From a checkout you can run `./install.sh` instead. Later, `edittude-v3 update` refreshes that same install.
+That installs `uv` if needed, syncs the project, and puts `edittude` in `~/.local/bin`. From a checkout you can run `./install.sh` instead. Later, `edittude update` refreshes that same install. A checkout that already lives in `~/.local/share/edittude-v3` stays there. New installs clone to `~/.local/share/edittude`.
 
 ffmpeg and ffprobe must be on PATH. On a Mac: `brew install ffmpeg`.
 
-First launch asks for a DeepSeek API key and writes it to `~/.config/edittude-v3/.env`. Get a key from [https://platform.deepseek.com](https://platform.deepseek.com). That file is the only place the app looks, besides `DEEPSEEK_API_KEY` already in the environment.
+First launch asks for a DeepSeek API key and writes it to `~/.config/edittude/.env`. If `~/.config/edittude-v3/.env` already exists, it is copied once and left in place. Get a key from [https://platform.deepseek.com](https://platform.deepseek.com). The app reads the new file, and `DEEPSEEK_API_KEY` if it is already in the environment. After that copy, the new file is the one to edit.
 
 ## CLI
 
 ```bash
-edittude-v3
-edittude-v3 ask "make a cut from /path/to/footage"
-edittude-v3 skills
-edittude-v3 media --help
-edittude-v3 update
-edittude-v3 -C /path/to/project
+edittude
+edittude ask "make a cut from /path/to/footage"
+edittude skills
+edittude media --help
+edittude update
+edittude -C /path/to/project
 ```
 
-`edittude-v3 update` pulls the latest checkout into the current install, then re-syncs. Use `--force` if that checkout has local edits you want overwritten.
+`edittude-v3` is the same program, kept so older installs keep working.
 
-`edittude-v3` with no args opens a session in the current directory. Transcript stays in normal terminal scrollback. The composer sits at the bottom.
+`edittude update` pulls the latest checkout into the current install, then re-syncs. Use `--force` if that checkout has local edits you want overwritten.
+
+`edittude` with no args opens a session in the current directory. Transcript stays in normal terminal scrollback. The composer sits at the bottom. Session history for a new project is `.edittude/`. A project that already has `.edittude-v3/` keeps using that folder.
 
 From a checkout without the installer:
 
 ```bash
 uv sync
-uv run edittude-v3
+uv run edittude
 ```
 
 
@@ -45,15 +47,15 @@ uv run edittude-v3
 These are what the agent should run instead of inventing ffmpeg filters:
 
 ```bash
-edittude-v3 media inventory FOLDER --out inventory.json
-edittude-v3 media plan inventory.json --out edl.json --title "A DAY OUT"
-edittude-v3 media assemble edl.json --out picture.mp4
-edittude-v3 media finish picture.mp4 edl.json --out final.mp4
-edittude-v3 media qc final.mp4 --out qc.json
-edittude-v3 media proof FOLDER --out /path/to/artifacts
+edittude media inventory FOLDER --out inventory.json
+edittude media plan inventory.json --out edl.json --title "A DAY OUT"
+edittude media assemble edl.json --out picture.mp4
+edittude media finish picture.mp4 edl.json --out final.mp4
+edittude media qc final.mp4 --out qc.json
+edittude media proof FOLDER --out /path/to/artifacts
 ```
 
-None of these overwrite an existing output. Rerunning one onto the same file needs `--force`, before or after the subcommand: `edittude-v3 media --force assemble edl.json --out picture.mp4`.
+None of these overwrite an existing output. Rerunning one onto the same file needs `--force`, before or after the subcommand: `edittude media --force assemble edl.json --out picture.mp4`.
 
 Write large renders next to the footage, not into this repo.
 

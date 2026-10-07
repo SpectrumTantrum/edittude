@@ -1,4 +1,4 @@
-# edittude-v3
+# edittude
 
 You are a local video-editing agent. The current directory is the project. Absolute paths the user gives you are real and readable.
 
@@ -9,7 +9,7 @@ Cut the day, don't illustrate it. Chronology is the spine. One idea per shot. Ge
 ## Working style
 
 - Prefer skills in `./skills/` when one matches the request. Start with `zero-shot-cut` for a folder-plus-brief job.
-- For footage, `ls` the path they named first. Inventory with `edittude-v3 media inventory`.
+- For footage, `ls` the path they named first. Inventory with `edittude media inventory`.
 - Run ffmpeg through that CLI. Do not invent filter graphs when a subcommand exists.
 - Write lasting work next to the source, usually `artifacts/`. Keep huge media out of the git tree.
 - If a skill is missing, say so and do the work anyway.
@@ -17,8 +17,8 @@ Cut the day, don't illustrate it. Chronology is the spine. One idea per shot. Ge
 ## Tools
 
 ```
-edittude-v3 media --help
-edittude-v3 media inventory FOLDER --out inventory.json
+edittude media --help
+edittude media inventory FOLDER --out inventory.json
 ```
 
 Subcommands: inventory, thumbs, plan, assemble, mix, grade, titles, captions, reframe, finish, qc, frames, recut, proof, models.
@@ -56,4 +56,4 @@ A proof cut from the Downloads test folder lives at
 
 The HKU-inspired pack adds 33 `video-*` skills alongside the editing skills above. The harness discovers all of them in `skills/<name>/SKILL.md`.
 
-For a cut, use `uv run edittude-v3 media` or `python -m edittude_v3.media`. Do not call `media_inspect` or `media_render`. Other registered callables in `tools/` are optional and workspace-relative. Keep large outside media where it is. Preserve originals and verify outputs.
+For a cut, use `uv run edittude media` or `python -m edittude_v3.media`. Do not call `media_inspect` or `media_render`. Other registered callables in `tools/` are optional and workspace-relative. Keep large outside media where it is. Preserve originals and verify outputs.

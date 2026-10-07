@@ -110,7 +110,7 @@ BACKENDS = {
 def _uv() -> str:
     found = shutil.which("uv") or str(Path.home() / ".local/bin/uv")
     if not Path(found).is_file():
-        raise SystemExit("uv is missing. Re-run the edittude-v3 installer.")
+        raise SystemExit("uv is missing. Re-run the edittude installer.")
     return found
 
 

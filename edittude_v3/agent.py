@@ -13,7 +13,7 @@ from deepagents import create_deep_agent
 from deepagents.backends import CompositeBackend, LocalShellBackend
 
 from edittude_v3.deepseek_vision import DEEPSEEK_PROFILE, DeepSeekImageMiddleware
-from edittude_v3.paths import PACKAGE_ROOT, env_file, install_root, state_dir
+from edittude_v3.paths import PACKAGE_ROOT, env_file, install_root, legacy_env_file, state_dir
 from edittude_v3.skills import skill_dirs
 from edittude_v3.subagents import video_subagents
 from edittude_v3.tools import load_workspace_tools
@@ -23,7 +23,7 @@ MODEL_LABEL = "DeepSeek Flash"
 API_KEY_ENV = "DEEPSEEK_API_KEY"
 API_KEY_URL = "https://platform.deepseek.com"
 DEFAULT_RECURSION_LIMIT = 400
-# `edittude-v3 config` names -> variables in env_file(). Defaults shown are what runs when unset.
+# `edittude config` names -> variables in env_file(). Defaults shown are what runs when unset.
 SETTINGS = {
     "model": ("EDITTUDE_MODEL", MODEL),
     "vision-url": ("EDITTUDE_VISION_URL", "http://localhost:1234/v1"),
@@ -33,7 +33,7 @@ SETTINGS = {
 }
 _API_KEY_LINE = re.compile(rf"^(?:export\s+)?{API_KEY_ENV}=.*$\n?", re.MULTILINE)
 
-SYSTEM_PROMPT = """You are edittude-v3, a local cutter.
+SYSTEM_PROMPT = """You are edittude, a local cutter.
 
 The user gives you a footage folder and a brief, or just a folder. You make a cut.
 You do not wait for an EDL. You do not ask twenty questions. Defaults:
@@ -73,7 +73,7 @@ Workflow:
 1. Read the matching skill under ./skills/. Start with zero-shot-cut when they
    want an edit from a folder.
 2. ls the folder they named. Absolute paths are real.
-3. Inventory with `edittude-v3 media`. Do not invent ffmpeg
+3. Inventory with `edittude media`. Do not invent ffmpeg
    graphs when a subcommand exists.
 4. Plan an EDL, assemble, finish, QC, recut if QC fails.
 5. A cut is not done until the output file exists on disk. Run the media CLI.
@@ -107,13 +107,49 @@ def model_label() -> str:
     return MODEL_LABEL if model_name() == MODEL else model_name()
 
 
+def _env_has_values(path: Path) -> bool:
+    if not path.is_file():
+        return False
+    return any(str(value or "").strip() for value in dotenv_values(path).values())
+
+
+def adopt_legacy_config() -> None:
+    """Copy ~/.config/edittude-v3/.env into ~/.config/edittude/ when the new file is empty.
+
+    The old file is left in place. Once the new file has any setting, it wins.
+    A new file that already has other settings still receives a missing API key.
+    EDITTUDE_CONFIG_HOME disables the lookup.
+    """
+    legacy = legacy_env_file()
+    if legacy is None or not legacy.is_file():
+        return
+    dest = env_file()
+    if dest.is_file() and _env_has_values(dest):
+        if not _key_from_file(dest) and (key := _key_from_file(legacy)):
+            save_api_key(key, dest)
+        return
+    text = legacy.read_text(encoding="utf-8")
+    if not text.strip():
+        return
+    if not text.endswith("\n"):
+        text += "\n"
+    try:
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_text(text, encoding="utf-8")
+        dest.chmod(0o600)
+    except OSError:
+        return
+
+
 def get_settings() -> dict[str, str]:
+    adopt_legacy_config()
     saved = dotenv_values(env_file()) if env_file().is_file() else {}
     return {name: os.getenv(var) or saved.get(var) or default for name, (var, default) in SETTINGS.items()}
 
 
 def set_setting(name: str, value: str | None) -> None:
     """Persist to env_file(); value None restores the default."""
+    adopt_legacy_config()
     var = SETTINGS[name][0]
     if name == "recursion-limit" and value is not None:
         try:
@@ -163,15 +199,30 @@ def _legacy_env_files() -> list[Path]:
 
 
 def load_env() -> None:
+    adopt_legacy_config()
     path = env_file()
     load_dotenv(path)
     if configured_api_key():
         return
-    for candidate in _legacy_env_files():
+    candidates: list[Path] = []
+    legacy = legacy_env_file()
+    if legacy is not None:
+        candidates.append(legacy)
+    candidates.extend(_legacy_env_files())
+    seen: set[Path] = set()
+    for candidate in candidates:
+        resolved = candidate.resolve()
+        if resolved in seen:
+            continue
+        seen.add(resolved)
         key = _key_from_file(candidate)
-        if key:
+        if not key:
+            continue
+        try:
             save_api_key(key, path)
-            return
+        except OSError:
+            os.environ[API_KEY_ENV] = key
+        return
 
 
 def configured_api_key() -> str:
@@ -217,7 +268,7 @@ def require_api_key() -> None:
     if configured_api_key():
         return
     raise SystemExit(
-        f"{API_KEY_ENV} is missing. Run edittude-v3 in a terminal to paste a key, "
+        f"{API_KEY_ENV} is missing. Run edittude in a terminal to paste a key, "
         f"or add it to {env_file()}."
     )
 
@@ -270,5 +321,5 @@ def build_agent(*, workspace: Path | None = None, model: BaseChatModel | None = 
         subagents=subagents,
         middleware=[DeepSeekImageMiddleware()],
         checkpointer=InMemorySaver(),
-        name="edittude-v3",
+        name="edittude",
     )

@@ -13,14 +13,14 @@ Know the bin before you cut.
 2. Run:
 
 ```
-edittude-v3 media inventory FOLDER --out OUT/inventory.json
+edittude media inventory FOLDER --out OUT/inventory.json
 ```
 
 3. Read the JSON. Note video count, total seconds, fps/resolution mix, and any audio-only file that looks like voiceover or music. Read `display_width`/`display_height` for the frame as it plays: coded `width`/`height` are pre-rotation, so a portrait phone clip reports 1920x1080 with `rotation` ±90. That `rotation` field is iPhone display-matrix and ffmpeg applies it on decode. Do not transpose again. Note the orientation mix too, since the delivery canvas follows the dominant footage.
 4. If you need eyes:
 
 ```
-edittude-v3 media thumbs OUT/inventory.json --out OUT/thumbs
+edittude media thumbs OUT/inventory.json --out OUT/thumbs
 ```
 
 Completion: a written inventory, and thumbs if you could not name the coverage without them.

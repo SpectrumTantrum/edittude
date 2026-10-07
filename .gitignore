@@ -3,6 +3,7 @@
 /models/
 .env
 /Untitled
+.edittude/
 .edittude-v3/
 __pycache__/
 *.py[cod]

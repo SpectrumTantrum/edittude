@@ -1,6 +1,6 @@
 # Portable video tools
 
-This folder contains executable Python tools. `get_tools(workspace)` in `__init__.py` returns eleven ordinary callables; edittude-v3 loads and registers them with DeepAgents. The implementation imports no Edittude or HKU modules. Copy this folder and the sibling [skills folder](../skills/README.md) into another repository, then register the returned callables in that host.
+This folder contains executable Python tools. `get_tools(workspace)` in `__init__.py` returns eleven ordinary callables; edittude loads and registers them with DeepAgents. The implementation imports no Edittude or HKU modules. Copy this folder and the sibling [skills folder](../skills/README.md) into another repository, then register the returned callables in that host.
 
 ## Run without a harness
 
@@ -25,7 +25,7 @@ Pass `--workspace PATH` when the process is running elsewhere. Media-tool paths 
 | `audio_timing` | Measure silence, RMS energy, and onset candidates. These are not guaranteed musical beats. |
 | `score_read` | Read MIDI tracks, notes, tempo changes and timing. The agent selects the melody track. |
 | `speech_transcribe` | Run cached faster-whisper and save source-linked timed JSON. |
-| `image_describe` | Ask a local OpenAI-compatible vision model (LM Studio, Ollama) about 1 to 8 images. Set `EDITTUDE_VISION_URL` and `EDITTUDE_VISION_MODEL`, or use `edittude-v3 config`. |
+| `image_describe` | Ask a local OpenAI-compatible vision model (LM Studio, Ollama) about 1 to 8 images. Set `EDITTUDE_VISION_URL` and `EDITTUDE_VISION_MODEL`, or use `edittude config`. |
 | `speech_synthesize` | Render a local stock voice using macOS `say` or `espeak`; return decoded WAV and measured duration. |
 | `audio_separate` | Invoke Demucs with a supplied local checkpoint repository and return actual stems. |
 | `singing_synthesize` | Invoke a compatible local DiffSinger backend with validated Mandarin timed lyric/note units. |
@@ -85,6 +85,6 @@ python tools/smoke_media.py
 
 The first checks the 33 skills and provenance manifest. Optional `--source PATH` verifies the original HKU source snapshot. The smoke check uses synthetic media and writes its results in a fresh temporary directory. Harness and tool integration tests live in the host repository's `tests/` directory.
 
-In edittude-v3, run the host integration checks with `python -m unittest discover -s tests -v`. To include cached ASR, set `EDITTUDE_TEST_ASR_PYTHON` to an interpreter with faster-whisper and a cached base model. The stock-speech test needs access to the operating system's speech service.
+In edittude, run the host integration checks with `python -m unittest discover -s tests -v`. To include cached ASR, set `EDITTUDE_TEST_ASR_PYTHON` to an interpreter with faster-whisper and a cached base model. The stock-speech test needs access to the operating system's speech service.
 
 Those checks passed locally, including actual rendering, source preservation, model failure paths, stock speech, cached speech recognition, and skill/tool use by the main agent and an inventory subagent. A live DeepSeek run also read a skill and called inspection/rendering tools successfully. Demucs, DiffSinger, and Seed-VC inference were not run; those adapters need the configured model assets above.

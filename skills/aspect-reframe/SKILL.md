@@ -15,13 +15,13 @@ Change aspect only when the brief names a delivery format. Then the presets
 are there:
 
 ```
-edittude-v3 media reframe final.mp4 --out vertical.mp4 --aspect 9:16
-edittude-v3 media reframe final.mp4 --out square.mp4 --aspect 1:1
+edittude media reframe final.mp4 --out vertical.mp4 --aspect 9:16
+edittude media reframe final.mp4 --out square.mp4 --aspect 1:1
 ```
 
-A second reframe onto the same output needs `edittude-v3 media --force reframe`.
+A second reframe onto the same output needs `edittude media --force reframe`.
 
-Or set `"aspect": "9:16"` on the EDL and run `edittude-v3 media --force assemble edl.json --out picture.mp4`
+Or set `"aspect": "9:16"` on the EDL and run `edittude media --force assemble edl.json --out picture.mp4`
 again so every event lands on that canvas.
 
 ## pad or crop

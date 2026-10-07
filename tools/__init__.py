@@ -166,7 +166,7 @@ def get_tools(workspace: str | Path) -> list:
         """LOOK at images. You cannot see images yourself; read_file on a jpg or png shows you nothing.
 
         Sends 1 to 8 jpg/png/webp files to the local vision model and returns its answer
-        as text. Extract frames or a contact sheet first (edittude-v3 media thumbs, or
+        as text. Extract frames or a contact sheet first (edittude media thumbs, or
         media_inspect mode 'frames'), then ask a concrete question: 'For each image:
         location, subject, shot scale, camera motion, anything unusable.' The answer is
         a model's reading, not ground truth; ask again when a cut depends on a detail.
