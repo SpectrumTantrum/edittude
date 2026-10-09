@@ -105,7 +105,6 @@ class HarnessFixesTest(unittest.TestCase):
             manifest["skills"] = manifest["skills"][:1]
             name = manifest["skills"][0]["skill"]
             (pack / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
-            shutil.copy(ROOT / "skills" / "LICENSE", pack / "LICENSE")
             shutil.copytree(ROOT / "skills" / name, pack / name)
             self.assertEqual(validate(pack), 1)  # Count comes from the manifest, not a constant.
             (pack / name / "SKILL.md").unlink()

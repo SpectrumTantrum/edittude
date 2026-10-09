@@ -26,7 +26,6 @@ def validate(pack, source=None):
     names = {entry["skill"] for entry in entries}
     _check(len(names) == count, "Duplicate skill")
     _check(names.issubset({p.parent.name for p in pack.glob("*/SKILL.md")}), "Missing mapped skill")
-    _check((pack / "LICENSE").is_file(), "Missing distribution license")
 
     for entry in entries:
         name = entry["skill"]

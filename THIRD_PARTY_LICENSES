@@ -2,7 +2,7 @@
 
 Checked 2026-10-09 against the artifact named in each row. `uv.lock` records hashes and versions, not licenses. A row marked **UNVERIFIED** was not established from the URL that was read. No license below is filled in from memory.
 
-There is no `LICENSE` file at the repository root. `tools/LICENSE` and `skills/LICENSE` are the license files for those directories.
+There is no `LICENSE` file at the repository root. `tools/` and `skills/` are Edittude's own code, Copyright (c) 2025-2026 Torres. That copyright is recorded in the section below. It is not a license for the rest of the repository.
 
 Model packages in `tools/install_models.py` are version ranges, not pins. The version in those rows is the newest PyPI release that satisfied the range on the date above. A later install can resolve a different release inside the same range.
 
@@ -92,26 +92,21 @@ These are the other packages pinned in `uv.lock`.
 | xxhash | 4.0.1 | BSD-2-Clause | PyPI `license` |
 | zstandard | 0.25.0 | BSD-3-Clause | PyPI `license_expression` |
 
-## HKU-inspired `tools/` and `skills/`
+## `tools/` and `skills/`
 
-`tools/` and `skills/` are HKU-inspired. `tools/README.md` says the implementation imports no Edittude or HKU modules. `skills/README.md` calls the pack inspired by HKU VideoAgent. `AGENTS.md` calls it the HKU-inspired pack. `skills/` includes 10 Edittude-only skills: `aspect-reframe`, `assembly`, `color-grade`, `editorial-taste`, `footage-inventory`, `iterate-recut`, `mix`, `review-qc`, `titles`, and `zero-shot-cut`. None of the 71 files under `tools/` and `skills/` exist at the same path in [HKUDS/VideoAgent](https://github.com/HKUDS/VideoAgent) at commit `f207987e3cffb554aaa6ffdbe733efb30f4b51ed`. `skills/manifest.json` records that repository and revision as the source of the 33 `video-*` role mappings.
+`tools/` and `skills/` are Edittude's own code, Copyright (c) 2025-2026 Torres. HKU Data Intelligence Lab's [VideoAgent](https://github.com/HKUDS/VideoAgent) is inspiration only.
 
-`tools/LICENSE` and `skills/LICENSE` are copies of HKU's MIT text, Copyright (c) 2025 Data Intelligence Lab@HKU. The two files are byte-identical to each other and to `LICENSE` at that VideoAgent commit.
+`tools/README.md` says the implementation imports no Edittude or HKU modules. `skills/README.md` and `AGENTS.md` describe the pack as inspired by HKU VideoAgent. `skills/` includes 10 Edittude-only skills: `aspect-reframe`, `assembly`, `color-grade`, `editorial-taste`, `footage-inventory`, `iterate-recut`, `mix`, `review-qc`, `titles`, and `zero-shot-cut`. `skills/manifest.json` records [HKUDS/VideoAgent](https://github.com/HKUDS/VideoAgent) at commit `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` as the source of the 33 `video-*` role mappings.
 
-sha256 `68c9fc511bb10d1488522aa139d1e91289b76ab998fc8ca815e93a85c4ea4850`
-
-Checked: <https://raw.githubusercontent.com/HKUDS/VideoAgent/f207987e3cffb554aaa6ffdbe733efb30f4b51ed/LICENSE>.
-
-Authorship and ownership of the Edittude-written code in `tools/` and `skills/` are **UNCERTAIN**.
+A git-blob comparison of the 71 files under `tools/` and `skills/` against that commit matched only `tools/LICENSE` and `skills/LICENSE`. Those files were byte-identical to VideoAgent `LICENSE` (sha256 `68c9fc511bb10d1488522aa139d1e91289b76ab998fc8ca815e93a85c4ea4850`), Copyright (c) 2025 Data Intelligence Lab@HKU. They covered no HKU code and are removed. Checked: <https://raw.githubusercontent.com/HKUDS/VideoAgent/f207987e3cffb554aaa6ffdbe733efb30f4b51ed/LICENSE>.
 
 | Component | License | Source |
 | --- | --- | --- |
-| `tools/LICENSE`, `skills/LICENSE` | Copies of HKU's MIT text, Copyright (c) 2025 Data Intelligence Lab@HKU | Byte-identical to VideoAgent `LICENSE` at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` |
-| Edittude-written code in `tools/` and `skills/` | **UNCERTAIN** authorship and ownership | `tools/README.md`, `skills/README.md`, `AGENTS.md`; path comparison above |
+| `tools/` and `skills/` | Edittude's own code, Copyright (c) 2025-2026 Torres | Owner confirmation. Content comparison against VideoAgent at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` |
 
 ## Optional model backends
 
-Declared in `BACKENDS` in `tools/install_models.py`. Upstream code repositories are cloned at install time. Weights are downloaded at install time. Those clones and weight files are not committed. `tools/patches/seed-vc.patch` is committed; see below.
+Declared in `BACKENDS` in `tools/install_models.py`. Upstream code repositories are cloned at install time. Weights are downloaded at install time. Those clones and weight files are not committed. `tools/patches/seed-vc.patch` is committed; see below. `tools/patches/DiffSinger.patch` is committed too: 243 lines on DiffSinger's MIT code (Copyright (c) 2021 Jinglin Liu, sha `4662c53a27a5ac662821eae23a7d71cfcff7356d`).
 
 ### Shared pip packages
 
@@ -184,6 +179,7 @@ Opencpop dataset license, from the official site linked by <https://github.com/w
 | Component | Pin | License | Source |
 | --- | --- | --- | --- |
 | MoonInTheRiver/DiffSinger | sha `4662c53a27a5ac662821eae23a7d71cfcff7356d` | MIT | `LICENSE` at that sha, Copyright (c) 2021 Jinglin Liu |
+| `tools/patches/DiffSinger.patch` | committed in this repository, 243 lines | MIT context from DiffSinger | Patches DiffSinger's MIT code at that sha |
 | pypinyin | 0.55.0, `>=0.53,<1` | MIT | PyPI `license` and MIT classifier |
 | pycwt | 0.4.0b0, `>=0.4.0b0,<0.5` | BSD-3-Clause | PyPI `license` text is a three-clause BSD grant |
 | h5py | 3.16.0, `>=3.12,<4` | BSD-3-Clause | PyPI `license_expression` |
@@ -232,7 +228,6 @@ These are invoked by name and are not bundled. No version is pinned, so a given 
 2. **`0102_xiaoma_pe` and `0109_hifigan_bigpopcs_hop128` weight licenses.** UNVERIFIED. The upstream release body is empty, and the Hugging Face card does not license them separately from the unverified Apache-2.0 tag. PopCS and the vocoder-dataset licenses named in the DiffSinger docs were not read. URL: <https://github.com/MoonInTheRiver/DiffSinger/releases/tag/pretrain-model>.
 3. **`rmvpe.pt`.** The license file at the pinned revision is an MIT grant and also says the package is for research use only. How those two statements sit together is not resolved here. URL: the `使用需遵守的协议-LICENSE.txt` raw URL in the `seed-vc` section.
 4. **Demucs `955717e8-8726e21a.th`.** The Demucs README and `LICENSE` at `e976d93ecc3865e5757426930257e200846a520a` state MIT and do not state a separate weight license. The README says `htdemucs` was trained on MusDB plus 800 songs. The MusDB page says 46 tracks are taken from MedleyDB under CC BY-NC-SA 4.0, 2 tracks were provided by Native Instruments and were originally part of their stems pack, and 2 tracks from The Easton Ellises are CC BY-NC-SA 3.0. It also says the tracks can only be used for academic purposes: <https://sigsep.github.io/datasets/musdb.html>. That page does not name a license for the Native Instruments tracks in that sentence. Whether those dataset terms bind the checkpoint is not stated by the Demucs README. The license of the extra 800 songs is not stated there either.
-5. **Authorship and ownership of the Edittude-written code in `tools/` and `skills/`.** UNCERTAIN. The `LICENSE` files there are copies of HKU's MIT text, Copyright (c) 2025 Data Intelligence Lab@HKU. The directories are described as HKU-inspired, and none of their 71 files exist at the same path in VideoAgent at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed`.
-6. **macOS `say`.** UNVERIFIED. The two Apple pages in the system-tools table do not state a license.
-7. **Installed ffmpeg / espeak binaries.** Upstream licenses above are for current source trees, not for a binary on a machine. An ffmpeg build with `--enable-gpl` is GPL-2.0-or-later. A `PATH` entry named `espeak` may be espeak-ng.
-8. **Unpinned model wheels and uv.** Licenses in the model tables are for one resolved version on 2026-10-09. uv's dual license was read on `main`; the installer does not pin a revision, and the GitHub license API reports Apache-2.0 only.
+5. **macOS `say`.** UNVERIFIED. The two Apple pages in the system-tools table do not state a license.
+6. **Installed ffmpeg / espeak binaries.** Upstream licenses above are for current source trees, not for a binary on a machine. An ffmpeg build with `--enable-gpl` is GPL-2.0-or-later. A `PATH` entry named `espeak` may be espeak-ng.
+7. **Unpinned model wheels and uv.** Licenses in the model tables are for one resolved version on 2026-10-09. uv's dual license was read on `main`; the installer does not pin a revision, and the GitHub license API reports Apache-2.0 only.
