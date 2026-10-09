@@ -108,7 +108,7 @@ A git-blob comparison of the 71 files under `tools/` and `skills/` against that 
 
 Declared in `BACKENDS` in `tools/install_models.py`. Upstream code repositories are cloned at install time. Weights are downloaded at install time. Those clones and weight files are not committed. `tools/patches/seed-vc.patch` is committed; see below. `tools/patches/DiffSinger.patch` is committed too: 243 lines on DiffSinger's MIT code (Copyright (c) 2021 Jinglin Liu, sha `4662c53a27a5ac662821eae23a7d71cfcff7356d`).
 
-The patches in `tools/patches/` (`DiffSinger.patch`, `seed-vc.patch`) modify third-party code and are under the upstream project's license, not MIT. `DiffSinger.patch` stays under DiffSinger's MIT license, Copyright (c) 2021 Jinglin Liu. `seed-vc.patch` stays under GPL-3.0. The root `LICENSE` does not relicense either patch.
+The patches in `tools/patches/` (`DiffSinger.patch`, `seed-vc.patch`) modify third-party code and are under the upstream project's license, not Edittude's MIT grant. `DiffSinger.patch` stays under DiffSinger's MIT license, Copyright (c) 2021 Jinglin Liu. `seed-vc.patch` stays under GPL-3.0. The root `LICENSE` does not relicense either patch.
 
 ### Shared pip packages
 
