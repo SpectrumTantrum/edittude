@@ -88,6 +88,8 @@ That creates a separate `.venv-models` (Python 3.11, torch) beside the install a
 
 The singing feature (`singing_synthesize`) is for non-commercial use only.
 
+`voice_convert` also downloads `rmvpe.pt`, whose license file states research use only.
+
 Both are fetched at install time and never committed. Everything runs offline afterwards.
 
 ## Keys
