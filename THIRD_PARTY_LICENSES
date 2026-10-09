@@ -2,7 +2,7 @@
 
 Checked 2026-10-09 against the artifact named in each row. `uv.lock` records hashes and versions, not licenses. A row marked **UNVERIFIED** was not established from the URL that was read. No license below is filled in from memory.
 
-There is no `LICENSE` file at the repository root. `tools/` and `skills/` are Edittude's own code, Copyright (c) 2025-2026 Torres. That copyright is recorded in the section below. It is not a license for the rest of the repository.
+Edittude's own code, including `tools/` and `skills/`, is covered by the root `LICENSE`: MIT for that code, Copyright (c) 2025-2026 Torres. Third-party components are excluded from that grant and keep the licenses named in this file. Where a License cell below is MIT, that is the named component's own license. It does not license Edittude, and it does not make singing or voice conversion commercial.
 
 Model packages in `tools/install_models.py` are version ranges, not pins. The version in those rows is the newest PyPI release that satisfied the range on the date above. A later install can resolve a different release inside the same range.
 
@@ -94,7 +94,7 @@ These are the other packages pinned in `uv.lock`.
 
 ## `tools/` and `skills/`
 
-`tools/` and `skills/` are Edittude's own code, Copyright (c) 2025-2026 Torres. HKU Data Intelligence Lab's [VideoAgent](https://github.com/HKUDS/VideoAgent) is inspiration only.
+`tools/` and `skills/` are Edittude's own code and are covered by the root `LICENSE` (MIT for that code, Copyright (c) 2025-2026 Torres). HKU Data Intelligence Lab's [VideoAgent](https://github.com/HKUDS/VideoAgent) is inspiration only.
 
 `tools/README.md` says the implementation imports no Edittude or HKU modules. `skills/README.md` and `AGENTS.md` describe the pack as inspired by HKU VideoAgent. `skills/` includes 10 Edittude-only skills: `aspect-reframe`, `assembly`, `color-grade`, `editorial-taste`, `footage-inventory`, `iterate-recut`, `mix`, `review-qc`, `titles`, and `zero-shot-cut`. `skills/manifest.json` records [HKUDS/VideoAgent](https://github.com/HKUDS/VideoAgent) at commit `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` as the source of the 33 `video-*` role mappings.
 
@@ -102,11 +102,13 @@ A git-blob comparison of the 71 files under `tools/` and `skills/` against that 
 
 | Component | License | Source |
 | --- | --- | --- |
-| `tools/` and `skills/` | Edittude's own code, Copyright (c) 2025-2026 Torres | Owner confirmation. Content comparison against VideoAgent at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` |
+| `tools/` and `skills/` | MIT for Edittude's own code, Copyright (c) 2025-2026 Torres, root `LICENSE`. Third-party components and `tools/patches/` are excluded | Owner confirmation. Content comparison against VideoAgent at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` |
 
 ## Optional model backends
 
 Declared in `BACKENDS` in `tools/install_models.py`. Upstream code repositories are cloned at install time. Weights are downloaded at install time. Those clones and weight files are not committed. `tools/patches/seed-vc.patch` is committed; see below. `tools/patches/DiffSinger.patch` is committed too: 243 lines on DiffSinger's MIT code (Copyright (c) 2021 Jinglin Liu, sha `4662c53a27a5ac662821eae23a7d71cfcff7356d`).
+
+The patches in `tools/patches/` (`DiffSinger.patch`, `seed-vc.patch`) modify third-party code and are under the upstream project's license, not MIT. `DiffSinger.patch` stays under DiffSinger's MIT license, Copyright (c) 2021 Jinglin Liu. `seed-vc.patch` stays under GPL-3.0. The root `LICENSE` does not relicense either patch.
 
 ### Shared pip packages
 
@@ -144,7 +146,7 @@ The `LICENSE` file at that commit is the GNU General Public License, version 3: 
 | Component | Pin | License | Source |
 | --- | --- | --- | --- |
 | Plachtaa/seed-vc | sha `86959712a9d7971b691bc9919bed78306eca8f41` | GPL-3.0 | `LICENSE` at that sha (GNU GPL version 3) |
-| `tools/patches/seed-vc.patch` | committed in this repository | A few lines of GPL-3.0 context from upstream `modules/rmvpe.py` | The hunk context around the added `float32` cast |
+| `tools/patches/seed-vc.patch` | committed in this repository | GPL-3.0, the upstream Seed-VC license. Not covered by the root `LICENSE` | The hunk context around the added `float32` cast |
 | einops | 0.8.2, `>=0.8,<1` | MIT | PyPI `license` and MIT classifier |
 | munch | 4.0.0, `>=4,<5` | MIT | PyPI `license` and MIT classifier |
 | librosa | 0.11.0, `>=0.11,<0.12` | ISC | PyPI `license` |
@@ -179,7 +181,7 @@ Opencpop dataset license, from the official site linked by <https://github.com/w
 | Component | Pin | License | Source |
 | --- | --- | --- | --- |
 | MoonInTheRiver/DiffSinger | sha `4662c53a27a5ac662821eae23a7d71cfcff7356d` | MIT | `LICENSE` at that sha, Copyright (c) 2021 Jinglin Liu |
-| `tools/patches/DiffSinger.patch` | committed in this repository, 243 lines | MIT context from DiffSinger | Patches DiffSinger's MIT code at that sha |
+| `tools/patches/DiffSinger.patch` | committed in this repository, 243 lines | Upstream DiffSinger MIT license, Copyright (c) 2021 Jinglin Liu. Not covered by the root `LICENSE` | Patches DiffSinger's MIT code at that sha |
 | pypinyin | 0.55.0, `>=0.53,<1` | MIT | PyPI `license` and MIT classifier |
 | pycwt | 0.4.0b0, `>=0.4.0b0,<0.5` | BSD-3-Clause | PyPI `license` text is a three-clause BSD grant |
 | h5py | 3.16.0, `>=3.12,<4` | BSD-3-Clause | PyPI `license_expression` |

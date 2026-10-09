@@ -92,6 +92,12 @@ The singing feature (`singing_synthesize`) is for non-commercial use only.
 
 Both are fetched at install time and never committed. Everything runs offline afterwards.
 
+## License
+
+Edittude's own code is MIT. Optional singing (DiffSinger, non-commercial) and voice conversion (Seed-VC, GPL-3.0, plus research-only `rmvpe.pt`) keep their own licenses. See `THIRD_PARTY_LICENSES`.
+
+The patches in `tools/patches/` (`DiffSinger.patch`, `seed-vc.patch`) modify third-party code and are under the upstream project's license, not MIT.
+
 ## Keys
 
 ```

@@ -4,6 +4,8 @@ version = "0.1.0"
 description = "Local video-editing agent"
 readme = "README.md"
 requires-python = ">=3.13"
+license = {text = "MIT for Edittude code; third-party components under their own licenses, see THIRD_PARTY_LICENSES"}
+license-files = ["LICENSE"]
 dependencies = [
     "deepagents>=0.7.15",
     "langchain-deepseek>=1.1.0",
