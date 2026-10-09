@@ -135,3 +135,5 @@ The agent loads the install `skills/` plus `./skills/` in the current directory.
 ## Credit
 
 Thanks to [Deep Agents](https://github.com/langchain-ai/deepagents) for the harness, and to [HKU Data Science](https://github.com/HKUDS) for [VideoAgent](https://github.com/HKUDS/VideoAgent), the voice agents project that inspired this one.
+
+tools/ and skills/ are inspired by HKU Data Intelligence Lab's VideoAgent; no HKU code is included.

@@ -8,7 +8,7 @@ These are instructions for an agent. The sibling tools folder supplies callable 
 
 Copy this `skills/` folder and its sibling `tools/` folder into any repository, keeping them next to each other. No Edittude installation, original checkout, bundled model directory, or absolute developer path is required. Existing destination folders can receive these files by an explicit merge after checking for name conflicts.
 
-Point a skill-compatible host at the skill folders, or copy individual skill folders into that host's configured skill directory. Automatic discovery depends on the host. An agent without a skill loader can read the selected `SKILL.md` directly. Retain [LICENSE](LICENSE) when redistributing the pack or a subset.
+Point a skill-compatible host at the skill folders, or copy individual skill folders into that host's configured skill directory. Automatic discovery depends on the host. An agent without a skill loader can read the selected `SKILL.md` directly.
 
 For example, give an agent the following request together with the repository path:
 

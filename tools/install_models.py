@@ -58,7 +58,7 @@ BACKENDS = {
             ("demucs/955717e8-8726e21a.th", _DEMUCS + "955717e8-8726e21a.th", "8726e21a"),
         ],
     },
-    # Seed-VC is GPL-3.0, so it is cloned at install time and never vendored into this MIT tree.
+    # Seed-VC is GPL-3.0, so it is cloned at install time and never vendored into this repo.
     # v3 always runs --f0-condition True, so only the 44k f0 model set is fetched. The aux repos
     # land in the HF cache layout upstream's own hf_hub_download/from_pretrained calls expect
     # (./checkpoints and ./checkpoints/hf_cache, relative to the clone), so no path patch is needed.
