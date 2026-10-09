@@ -81,10 +81,14 @@ That creates a separate `.venv-models` (Python 3.11, torch) beside the install a
 | `diffsinger` | `singing_synthesize` | ~0.5 GB      | explicit opt-in, Mandarin only |
 
 
-`seed-vc` and `diffsinger` stay out of the default list because they are large and their licences are not this repo's:
+`seed-vc` and `diffsinger` stay out of the default list because they are large and carry terms of their own:
 
-- **Seed-VC is GPL-3.0.** The installer clones it from upstream at a pinned commit into `models/seed-vc` and applies `tools/patches/seed-vc.patch`; nothing of it is vendored into this MIT repo. Your use of `voice_convert` is subject to the GPL.
-- **DiffSinger is MIT, but its** `0228_opencpop_ds100_rel` **checkpoint is trained on Opencpop (CC BY-NC-ND 4.0) and is therefore non-commercial only.** The installer prints this when you install `diffsinger`. `singing_synthesize` sings Mandarin and nothing else.
+- **Seed-VC is GPL-3.0.** The installer clones it from upstream at a pinned commit into `models/seed-vc` and applies `tools/patches/seed-vc.patch`. Your use of `voice_convert` is subject to the GPL.
+- The `0228_opencpop_ds100_rel` checkpoint is trained on Opencpop (CC BY-NC-ND 4.0) and is non-commercial only. The installer prints this when you install `diffsinger`. `singing_synthesize` sings Mandarin and nothing else.
+
+The singing feature (`singing_synthesize`) is for non-commercial use only.
+
+`voice_convert` also downloads `rmvpe.pt`, whose license file states research use only.
 
 Both are fetched at install time and never committed. Everything runs offline afterwards.
 

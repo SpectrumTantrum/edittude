@@ -1,0 +1,238 @@
+# Third-party licenses
+
+Checked 2026-10-09 against the artifact named in each row. `uv.lock` records hashes and versions, not licenses. A row marked **UNVERIFIED** was not established from the URL that was read. No license below is filled in from memory.
+
+There is no `LICENSE` file at the repository root. `tools/LICENSE` and `skills/LICENSE` are the license files for those directories.
+
+Model packages in `tools/install_models.py` are version ranges, not pins. The version in those rows is the newest PyPI release that satisfied the range on the date above. A later install can resolve a different release inside the same range.
+
+## Python packages
+
+Direct dependencies are the `[project] dependencies` in `pyproject.toml`, at the versions in `uv.lock`. `pygments` is the `markdown` extra of `python-xli`. `hatchling` is the build backend in `[build-system]`; it is not in `uv.lock`, so the version below is the newest release on PyPI that day, not a pin.
+
+Where the PyPI `license` field or `license_expression` named the license, that field is the source. Where it did not, the `LICENSE` file inside the sdist URL recorded in `uv.lock` was read.
+
+| Component | Version | License | Source |
+| --- | --- | --- | --- |
+| deepagents | 0.7.15 | MIT | PyPI `license` and MIT classifier |
+| langchain-deepseek | 1.1.0 | MIT | PyPI `license` and MIT classifier |
+| python-dotenv | 1.2.3 | BSD-3-Clause | PyPI `license` |
+| python-xli | 0.2.0 | MIT | PyPI `license` and MIT classifier |
+| pygments | 2.21.0 | BSD-2-Clause | PyPI `license_expression` |
+| hatchling | 1.32.4 | MIT | PyPI `license_expression` (build backend, unpinned) |
+
+### Other packages in `uv.lock`
+
+These are the other packages pinned in `uv.lock`.
+
+| Component | Version | License | Source |
+| --- | --- | --- | --- |
+| annotated-types | 0.8.0 | MIT | PyPI `license_expression` |
+| anthropic | 1.7.0 | MIT | PyPI `license` and MIT classifier |
+| anyio | 4.15.1 | MIT | PyPI `license_expression` |
+| bracex | 3.0.1 | MIT | PyPI `license_expression` |
+| certifi | 2026.7.22 | MPL-2.0 | PyPI `license` |
+| cffi | 2.1.1 | MIT-0 | PyPI `license_expression` |
+| charset-normalizer | 3.5.1 | MIT | PyPI `license` |
+| cryptography | 50.0.1 | Apache-2.0 OR BSD-3-Clause | PyPI `license_expression` |
+| distro | 1.9.0 | Apache-2.0 | PyPI `license`: "Apache License, Version 2.0" |
+| docstring-parser | 0.18.0 | MIT | PyPI `license` and MIT classifier |
+| filetype | 1.2.0 | MIT | PyPI `license` and MIT classifier |
+| google-auth | 2.58.0 | Apache-2.0 | PyPI `license`: "Apache 2.0" |
+| google-genai | 2.24.0 | Apache-2.0 | PyPI `license_expression` |
+| h11 | 0.16.0 | MIT | PyPI `license` and MIT classifier |
+| httpcore | 1.0.9 | BSD-3-Clause | PyPI `license_expression` |
+| httpcore2 | 2.13.0 | BSD-3-Clause | PyPI `license_expression` |
+| httpx | 0.28.1 | BSD-3-Clause | PyPI `license` |
+| httpx2 | 2.13.0 | BSD-3-Clause | PyPI `license_expression` |
+| httpx2-jsfetch | 1.0 | BSD-3-Clause | PyPI `license_expression` |
+| idna | 3.20 | BSD-3-Clause | PyPI `license_expression` |
+| jiter | 0.17.0 | MIT | PyPI `license_expression` |
+| jsonpatch | 1.33 | BSD-3-Clause | `LICENSE` in the locked sdist (three-clause BSD). PyPI `license` says "Modified BSD License" |
+| jsonpointer | 3.1.1 | BSD-3-Clause | `LICENSE.txt` in the locked sdist (three-clause BSD). PyPI `license` says "Modified BSD License" |
+| langchain | 1.4.2 | MIT | PyPI `license` and MIT classifier |
+| langchain-anthropic | 1.7.2 | MIT | PyPI `license` and MIT classifier |
+| langchain-core | 1.6.3 | MIT | PyPI `license` and MIT classifier |
+| langchain-google-genai | 4.4.0 | MIT | PyPI `license` |
+| langchain-openai | 1.6.2 | MIT | PyPI `license` and MIT classifier |
+| langchain-protocol | 0.0.19 | MIT | PyPI `license` and MIT classifier |
+| langgraph | 1.2.11 | MIT | PyPI `license_expression` |
+| langgraph-checkpoint | 4.2.0 | MIT | PyPI `license_expression` |
+| langgraph-prebuilt | 1.1.0 | MIT | PyPI `license_expression` |
+| langgraph-sdk | 0.4.4 | MIT | PyPI `license_expression` |
+| langsmith | 0.13.0 | MIT | PyPI `license` |
+| markdown-it-py | 4.2.0 | MIT | `LICENSE` in the locked sdist. PyPI MIT classifier. The sdist also ships `LICENSE.markdown-it`, MIT, for the JavaScript original |
+| mdurl | 0.1.2 | MIT | `LICENSE` in the locked sdist. PyPI MIT classifier |
+| openai | 3.16.2 | Apache-2.0 | PyPI `license_expression` |
+| orjson | 3.12.0 | MPL-2.0 AND (Apache-2.0 OR MIT) | PyPI `license_expression` |
+| ormsgpack | 1.12.2 | Apache-2.0 OR MIT | PyPI `license_expression` |
+| packaging | 26.3 | Apache-2.0 OR BSD-2-Clause | PyPI `license_expression` |
+| prompt-toolkit | 3.0.53 | BSD-3-Clause | `LICENSE` in the locked sdist (three-clause BSD). PyPI classifier is only "BSD License" |
+| pyasn1 | 0.6.4 | BSD-2-Clause | PyPI `license` |
+| pyasn1-modules | 0.4.2 | BSD-2-Clause | `LICENSE.txt` in the locked sdist (two clauses, then the disclaimer). PyPI `license` is "BSD" |
+| pycparser | 3.0 | BSD-3-Clause | PyPI `license_expression` |
+| pydantic | 2.13.5 | MIT | PyPI `license_expression` |
+| pydantic-core | 2.46.5 | MIT | PyPI `license_expression` |
+| pyyaml | 6.0.3 | MIT | PyPI `license` and MIT classifier. Also the package named in `tools/requirements.txt` (`PyYAML>=6,<7`) |
+| regex | 2026.9.10 | Apache-2.0 AND CNRI-Python | PyPI `license_expression` |
+| requests | 2.34.2 | Apache-2.0 | PyPI `license` |
+| requests-toolbelt | 1.0.0 | Apache-2.0 | PyPI `license`: "Apache 2.0" |
+| rich | 15.0.0 | MIT | PyPI `license` and MIT classifier |
+| sniffio | 1.3.1 | MIT OR Apache-2.0 | PyPI `license` |
+| tenacity | 9.1.4 | Apache-2.0 | PyPI `license`: "Apache 2.0" |
+| tiktoken | 0.14.0 | MIT | `LICENSE` in the locked sdist. Copyright (c) 2022 OpenAI, Shantanu Jain |
+| truststore | 0.10.4 | MIT | PyPI `license_expression` |
+| typing-extensions | 4.16.0 | PSF-2.0 | PyPI `license_expression` |
+| typing-inspection | 0.4.4 | MIT | PyPI `license_expression` |
+| urllib3 | 2.8.0 | MIT | PyPI `license_expression` |
+| uuid-utils | 0.17.1 | BSD-3-Clause | PyPI `license_expression` |
+| wcmatch | 11.0.1 | MIT | PyPI `license_expression` and MIT classifier |
+| wcwidth | 0.8.4 | MIT | PyPI `license_expression` |
+| websockets | 16.1.1 | BSD-3-Clause | PyPI `license_expression` |
+| xxhash | 4.0.1 | BSD-2-Clause | PyPI `license` |
+| zstandard | 0.25.0 | BSD-3-Clause | PyPI `license_expression` |
+
+## HKU-inspired `tools/` and `skills/`
+
+`tools/` and `skills/` are HKU-inspired. `tools/README.md` says the implementation imports no Edittude or HKU modules. `skills/README.md` calls the pack inspired by HKU VideoAgent. `AGENTS.md` calls it the HKU-inspired pack. `skills/` includes 10 Edittude-only skills: `aspect-reframe`, `assembly`, `color-grade`, `editorial-taste`, `footage-inventory`, `iterate-recut`, `mix`, `review-qc`, `titles`, and `zero-shot-cut`. None of the 71 files under `tools/` and `skills/` exist at the same path in [HKUDS/VideoAgent](https://github.com/HKUDS/VideoAgent) at commit `f207987e3cffb554aaa6ffdbe733efb30f4b51ed`. `skills/manifest.json` records that repository and revision as the source of the 33 `video-*` role mappings.
+
+`tools/LICENSE` and `skills/LICENSE` are copies of HKU's MIT text, Copyright (c) 2025 Data Intelligence Lab@HKU. The two files are byte-identical to each other and to `LICENSE` at that VideoAgent commit.
+
+sha256 `68c9fc511bb10d1488522aa139d1e91289b76ab998fc8ca815e93a85c4ea4850`
+
+Checked: <https://raw.githubusercontent.com/HKUDS/VideoAgent/f207987e3cffb554aaa6ffdbe733efb30f4b51ed/LICENSE>.
+
+Authorship and ownership of the Edittude-written code in `tools/` and `skills/` are **UNCERTAIN**.
+
+| Component | License | Source |
+| --- | --- | --- |
+| `tools/LICENSE`, `skills/LICENSE` | Copies of HKU's MIT text, Copyright (c) 2025 Data Intelligence Lab@HKU | Byte-identical to VideoAgent `LICENSE` at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed` |
+| Edittude-written code in `tools/` and `skills/` | **UNCERTAIN** authorship and ownership | `tools/README.md`, `skills/README.md`, `AGENTS.md`; path comparison above |
+
+## Optional model backends
+
+Declared in `BACKENDS` in `tools/install_models.py`. Upstream code repositories are cloned at install time. Weights are downloaded at install time. Those clones and weight files are not committed. `tools/patches/seed-vc.patch` is committed; see below.
+
+### Shared pip packages
+
+Installed for every selected backend (`SHARED`).
+
+| Component | Version checked | Constraint | License | Source |
+| --- | --- | --- | --- | --- |
+| torch | 2.8.0 | `>=2.6,<2.9` | BSD-3-Clause | PyPI `license`. The tag `v2.8.0` `LICENSE` is a three-clause BSD grant: <https://raw.githubusercontent.com/pytorch/pytorch/v2.8.0/LICENSE> |
+| torchaudio | 2.8.0 | `>=2.6,<2.9` | BSD-2-Clause | `LICENSE` at tag `v2.8.0` begins "BSD 2-Clause License": <https://raw.githubusercontent.com/pytorch/audio/v2.8.0/LICENSE>. PyPI classifier is only "BSD License" |
+| numpy | 2.5.3 | `<3` | BSD-3-Clause AND 0BSD AND MIT AND Zlib AND CC0-1.0 | PyPI `license_expression` |
+| soundfile | 0.14.0 | none | BSD-3-Clause | PyPI `license`: "BSD 3-Clause License" |
+| huggingface-hub | 0.36.2 | `>=0.34,<1` | Apache-2.0 | `LICENSE` at tag `v0.36.2`: <https://raw.githubusercontent.com/huggingface/huggingface_hub/v0.36.2/LICENSE>. PyPI `license` is "Apache" |
+
+### `asr`
+
+| Component | Pin | License | Source |
+| --- | --- | --- | --- |
+| faster-whisper | 1.2.1, constraint `>=1.2,<2` | MIT | PyPI `license` and MIT classifier |
+| Systran/faster-whisper-base | rev `ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66`. Files: `model.bin`, `config.json`, `tokenizer.json`, `vocabulary.txt` | MIT | Model card at that rev, `license: mit`. <https://huggingface.co/Systran/faster-whisper-base/raw/ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66/README.md> |
+
+### `separation`
+
+| Component | Pin | License | Source |
+| --- | --- | --- | --- |
+| demucs (pip) | 4.1.0, constraint `>=4.1,<5` | MIT | PyPI `license`: "MIT License" |
+| facebookresearch/demucs | commit `e976d93ecc3865e5757426930257e200846a520a`. `htdemucs.yaml` is fetched from `demucs/remote/` at this commit | MIT | `LICENSE` at that commit, Copyright (c) Meta Platforms, Inc. and affiliates. README at that commit: "Demucs is released under the MIT license as found in the LICENSE file." |
+| htdemucs weights `955717e8-8726e21a.th` | <https://dl.fbaipublicfiles.com/demucs/hybrid_transformer/955717e8-8726e21a.th> | MIT, as the project states it for Demucs at that commit. The weight URL itself is not a license document | Same README and `LICENSE` as the row above. Training-data terms are in Uncertain |
+
+### `seed-vc`
+
+Seed-VC is GPL-3.0 code cloned at install time. The installer clones <https://github.com/Plachtaa/seed-vc> at `86959712a9d7971b691bc9919bed78306eca8f41` into `models/seed-vc` and applies `tools/patches/seed-vc.patch`. That patch is committed here. Its hunk against upstream `modules/rmvpe.py` carries a few lines of GPL-3.0 context from that file, around the added `float32` cast.
+
+The `LICENSE` file at that commit is the GNU General Public License, version 3: <https://raw.githubusercontent.com/Plachtaa/seed-vc/86959712a9d7971b691bc9919bed78306eca8f41/LICENSE>. The Seed-VC tree at that commit contains no second license file.
+
+| Component | Pin | License | Source |
+| --- | --- | --- | --- |
+| Plachtaa/seed-vc | sha `86959712a9d7971b691bc9919bed78306eca8f41` | GPL-3.0 | `LICENSE` at that sha (GNU GPL version 3) |
+| `tools/patches/seed-vc.patch` | committed in this repository | A few lines of GPL-3.0 context from upstream `modules/rmvpe.py` | The hunk context around the added `float32` cast |
+| einops | 0.8.2, `>=0.8,<1` | MIT | PyPI `license` and MIT classifier |
+| munch | 4.0.0, `>=4,<5` | MIT | PyPI `license` and MIT classifier |
+| librosa | 0.11.0, `>=0.11,<0.12` | ISC | PyPI `license` |
+| transformers | 4.57.6, `>=4.45,<5` | Apache-2.0 | PyPI `license`: "Apache 2.0 License" |
+| descript-audio-codec | 1.0.0, `>=1,<2` | MIT | PyPI `license` |
+| argbind | 0.3.9, required by descript-audio-codec 1.0.0 (`argbind>=0.3.7`) | MIT | PyPI MIT classifier |
+| descript-audiotools | 0.7.2, required by descript-audio-codec 1.0.0 (`descript-audiotools>=0.7.2`) | MIT | PyPI `license` |
+| scipy | 1.18.1, `>=1.15,<2` | BSD-3-Clause | PyPI `license` text is a three-clause BSD grant |
+| PyYAML | 6.0.3, `>=6,<7` | MIT | PyPI `license` and MIT classifier |
+| Plachta/Seed-VC weights | rev `257283f9f41585055e8f858fba4fd044e5caed6e`. Patterns `*_f0_44k_*_v2.pth`, `*f0_44k.yml` | GPL-3.0 | Model card at that rev, `license: gpl-3.0`. <https://huggingface.co/Plachta/Seed-VC/raw/257283f9f41585055e8f858fba4fd044e5caed6e/README.md> |
+| funasr/campplus | rev `e4b6ede7ce16997aff4ae69fbca1f0175e2afede`. File `campplus_cn_common.bin` | Apache-2.0 | Model card at that rev, `license: apache-2.0`. <https://huggingface.co/funasr/campplus/raw/e4b6ede7ce16997aff4ae69fbca1f0175e2afede/README.md> |
+| lj1995/VoiceConversionWebUI `rmvpe.pt` | rev `e6d0c1a17da07c33557852f9dfa2bd44cc75737d` | MIT, plus a research-use sentence in the same file | Model card `license: mit`. License file at that rev: `使用需遵守的协议-LICENSE.txt`. See the note under this table |
+| openai/whisper-small | rev `973afd24965f72e36ca33b3055d56a652f456b4d`. Files `config.json`, `model.safetensors`, `preprocessor_config.json` | Apache-2.0 | Model card at that rev, `license: apache-2.0`. <https://huggingface.co/openai/whisper-small/raw/973afd24965f72e36ca33b3055d56a652f456b4d/README.md> |
+| nvidia/bigvgan_v2_44khz_128band_512x | rev `95a9d1dcb12906c03edd938d77b9333d6ded7dfb`. Files `bigvgan_generator.pt`, `config.json` | MIT | `LICENSE` at that rev, Copyright (c) 2024 NVIDIA CORPORATION. Model card `license: mit`. <https://huggingface.co/nvidia/bigvgan_v2_44khz_128band_512x/raw/95a9d1dcb12906c03edd938d77b9333d6ded7dfb/LICENSE> |
+
+The VoiceConversionWebUI license file at that revision is an MIT grant, Copyright (c) 2022 lj1995, and it also contains this sentence before the English MIT text:
+
+> 本软件仅供研究使用，使用软件者、传播软件导出的声音者自负全责。如不认可该条款，则不能使用/引用软件包内所有代码和文件。
+
+Reading that sentence: the software is for research use only; the person who uses it, and the person who distributes audio it exports, bear the responsibility; if you do not accept the clause, you may not use or cite any code or file in the package. The same file then lists other projects (ContentVec, VITS, HiFi-GAN, gradio, an ffmpeg build, ultimatevocalremovergui, audio-slicer). The installer fetches `rmvpe.pt` only. URL: <https://huggingface.co/lj1995/VoiceConversionWebUI/raw/e6d0c1a17da07c33557852f9dfa2bd44cc75737d/%E4%BD%BF%E7%94%A8%E9%9C%80%E9%81%B5%E5%AE%88%E7%9A%84%E5%8D%8F%E8%AE%AE-LICENSE.txt>.
+
+### `diffsinger`
+
+DiffSinger code at the pinned commit is MIT. The `0228_opencpop_ds100_rel` checkpoint is trained on Opencpop (CC BY-NC-ND 4.0) and is non-commercial only.
+
+Code: <https://github.com/MoonInTheRiver/DiffSinger> at `4662c53a27a5ac662821eae23a7d71cfcff7356d`. `LICENSE` at that commit is the MIT license, Copyright (c) 2021 Jinglin Liu. <https://raw.githubusercontent.com/MoonInTheRiver/DiffSinger/4662c53a27a5ac662821eae23a7d71cfcff7356d/LICENSE>
+
+`docs/README-SVS-opencpop-e2e.md` at that commit sets `MY_DS_EXP_NAME=0228_opencpop_ds100_rel`, says the pipeline is for the Opencpop dataset, and points pretrained weights at the `pretrain-model` release asset `0228_opencpop_ds100_rel.zip`. The checkpoint `config.yaml` on the Hugging Face revision below sets `binarizer_cls: data_gen.singing.binarize.OpencpopBinarizer` and `binary_data_dir: data/binary/opencpop-midi-dp`.
+
+Opencpop dataset license, from the official site linked by <https://github.com/wenet-e2e/Opencpop> (`README.md` calls <https://wenet-e2e.github.io/opencpop/> the official website). The license page is <https://wenet-e2e.github.io/opencpop/liscense/> (the path is spelled that way). It says: "The Opencpop dataset is available to download for non-commercial purposes under a CC BY-NC-ND 4.0 License." <https://wenet.org.cn/opencpop/> returned HTTP 404.
+
+| Component | Pin | License | Source |
+| --- | --- | --- | --- |
+| MoonInTheRiver/DiffSinger | sha `4662c53a27a5ac662821eae23a7d71cfcff7356d` | MIT | `LICENSE` at that sha, Copyright (c) 2021 Jinglin Liu |
+| pypinyin | 0.55.0, `>=0.53,<1` | MIT | PyPI `license` and MIT classifier |
+| pycwt | 0.4.0b0, `>=0.4.0b0,<0.5` | BSD-3-Clause | PyPI `license` text is a three-clause BSD grant |
+| h5py | 3.16.0, `>=3.12,<4` | BSD-3-Clause | PyPI `license_expression` |
+| pandas | 2.3.3, `>=2.2,<3` | BSD-3-Clause | PyPI `license` text begins "BSD 3-Clause License" |
+| matplotlib | 3.11.2, `>=3.9,<4` | matplotlib License Agreement for versions 1.3.0 and later | PyPI `license` text. Classifier: Python Software Foundation License |
+| librosa, scipy, einops, PyYAML | same packages as `seed-vc` | ISC, BSD-3-Clause, MIT, MIT | same rows as `seed-vc` |
+| `0228_opencpop_ds100_rel` | file set `0228_opencpop_ds100_rel/*` from PillowTa1k/DiffSinger rev `87c4ccc78132ec624eca9a86c94cb6e2c607185d` | Non-commercial only. Trained on Opencpop, CC BY-NC-ND 4.0 | Opencpop license page and DiffSinger docs cited above. The GitHub release body that ships `0228_opencpop_ds100_rel.zip` is empty |
+| `0102_xiaoma_pe` | `0102_xiaoma_pe/*` at the same rev | **UNVERIFIED** | Empty release body at <https://github.com/MoonInTheRiver/DiffSinger/releases/tag/pretrain-model>. Docs call it the vocoder pendant (`0102_xiaoma_pe.zip`). No weight license in that release or in the checkpoint `config.yaml` |
+| `0109_hifigan_bigpopcs_hop128` | `0109_hifigan_bigpopcs_hop128/*` at the same rev | **UNVERIFIED** | Same empty release. `docs/README-SVS-opencpop-e2e.md` at the pinned sha says this HiFiGAN-Singing vocoder is trained on a vocoder dataset and the PopCS training set, and that Opencpop is out of domain for it. Those dataset licenses were not read |
+
+`0102_xiaoma_pe` and `0109_hifigan_bigpopcs_hop128` are fetched with the Opencpop acoustic checkpoint. The non-commercial term above is for `0228_opencpop_ds100_rel`. It is not a verified license for the other two checkpoints.
+
+#### PillowTa1k re-upload
+
+The PillowTa1k re-upload does not appear to have redistribution rights.
+
+Checked at rev `87c4ccc78132ec624eca9a86c94cb6e2c607185d`:
+
+- The model card is only `license: apache-2.0`. There is no body, no copyright holder, and no permission from the DiffSinger authors. <https://huggingface.co/PillowTa1k/DiffSinger/raw/87c4ccc78132ec624eca9a86c94cb6e2c607185d/README.md>
+- The file list at that revision has no `LICENSE` file. It has `README.md` and the three checkpoint directories named above.
+- The same checkpoint names are the DiffSinger authors' release assets on `pretrain-model`. That release body is empty. Upstream code copyright in the pinned `LICENSE` is Jinglin Liu.
+- An Apache-2.0 tag would allow commercial use and redistribution. The Opencpop dataset terms for `0228_opencpop_ds100_rel` are CC BY-NC-ND 4.0, non-commercial. The card does not show a grant that would let PillowTa1k relicense those files.
+
+The card's Apache-2.0 label is **UNVERIFIED** as a grant of rights. URL checked: the README raw URL above, and the revision API <https://huggingface.co/api/models/PillowTa1k/DiffSinger/revision/87c4ccc78132ec624eca9a86c94cb6e2c607185d>.
+
+## System tools
+
+These are invoked by name and are not bundled. No version is pinned, so a given machine can differ from current upstream.
+
+| Tool | License | Source |
+| --- | --- | --- |
+| ffmpeg, ffprobe | LGPL-2.1-or-later for a default build. GPL-2.0-or-later when configured with `--enable-gpl` | Current upstream `LICENSE.md`: <https://raw.githubusercontent.com/FFmpeg/FFmpeg/master/LICENSE.md>. Same split on <https://ffmpeg.org/legal.html>. The license of an installed binary follows that binary's build |
+| espeak-ng | GPL-3.0-or-later. The `getopt_long` portion is BSD-2-Clause | README on `master`: "released under the GPL version 3 or later license", and `COPYING` is the GNU GPL version 3. <https://raw.githubusercontent.com/espeak-ng/espeak-ng/master/README.md>, <https://raw.githubusercontent.com/espeak-ng/espeak-ng/master/COPYING> |
+| espeak | GPL-3.0-or-later for the upstream sources, as the Debian copyright file records it. That file also records a public-domain phoneme file, a permissive portaudio header, and sonic under LGPL-2.1-or-later | <https://sources.debian.org/data/main/e/espeak/1.48.15+dfsg-3/debian/copyright>. No upstream `LICENSE` was found at `https://github.com/espeak/espeak` or `https://raw.githubusercontent.com/espeak-ng/espeak/master/License.txt` (404; the `espeak-ng/espeak` API path resolves to the espeak-ng repository) |
+| say (macOS) | **UNVERIFIED** | <https://support.apple.com/guide/terminal/say-apdc0c7f70e8/mac> and <https://developer.apple.com/library/archive/documentation/UserExperience/Conceptual/SpeechSynthesisProgrammingGuide/FineTuning/FineTuning.html> do not state a license |
+
+`speech_synthesize` uses the first of `say`, `espeak-ng`, and `espeak` that is on `PATH`.
+
+## `uv`
+
+`install.sh` fetches uv from <https://astral.sh/uv/install.sh> when it is missing. The script does not pin a commit. On `main` the README says uv is licensed under either Apache-2.0 (`LICENSE-APACHE`) or MIT (`LICENSE-MIT`). Both files were read: <https://raw.githubusercontent.com/astral-sh/uv/main/LICENSE-APACHE>, <https://raw.githubusercontent.com/astral-sh/uv/main/LICENSE-MIT>, <https://raw.githubusercontent.com/astral-sh/uv/main/README.md>. The GitHub repository license API reports SPDX `Apache-2.0` only.
+
+## Uncertain
+
+1. **PillowTa1k/DiffSinger redistribution.** The re-upload does not appear to have redistribution rights. The card at `87c4ccc78132ec624eca9a86c94cb6e2c607185d` says Apache-2.0 and supplies no grant from the rightsholder. That Apache-2.0 label is UNVERIFIED. URL: <https://huggingface.co/PillowTa1k/DiffSinger/raw/87c4ccc78132ec624eca9a86c94cb6e2c607185d/README.md>.
+2. **`0102_xiaoma_pe` and `0109_hifigan_bigpopcs_hop128` weight licenses.** UNVERIFIED. The upstream release body is empty, and the Hugging Face card does not license them separately from the unverified Apache-2.0 tag. PopCS and the vocoder-dataset licenses named in the DiffSinger docs were not read. URL: <https://github.com/MoonInTheRiver/DiffSinger/releases/tag/pretrain-model>.
+3. **`rmvpe.pt`.** The license file at the pinned revision is an MIT grant and also says the package is for research use only. How those two statements sit together is not resolved here. URL: the `使用需遵守的协议-LICENSE.txt` raw URL in the `seed-vc` section.
+4. **Demucs `955717e8-8726e21a.th`.** The Demucs README and `LICENSE` at `e976d93ecc3865e5757426930257e200846a520a` state MIT and do not state a separate weight license. The README says `htdemucs` was trained on MusDB plus 800 songs. The MusDB page says 46 tracks are taken from MedleyDB under CC BY-NC-SA 4.0, 2 tracks were provided by Native Instruments and were originally part of their stems pack, and 2 tracks from The Easton Ellises are CC BY-NC-SA 3.0. It also says the tracks can only be used for academic purposes: <https://sigsep.github.io/datasets/musdb.html>. That page does not name a license for the Native Instruments tracks in that sentence. Whether those dataset terms bind the checkpoint is not stated by the Demucs README. The license of the extra 800 songs is not stated there either.
+5. **Authorship and ownership of the Edittude-written code in `tools/` and `skills/`.** UNCERTAIN. The `LICENSE` files there are copies of HKU's MIT text, Copyright (c) 2025 Data Intelligence Lab@HKU. The directories are described as HKU-inspired, and none of their 71 files exist at the same path in VideoAgent at `f207987e3cffb554aaa6ffdbe733efb30f4b51ed`.
+6. **macOS `say`.** UNVERIFIED. The two Apple pages in the system-tools table do not state a license.
+7. **Installed ffmpeg / espeak binaries.** Upstream licenses above are for current source trees, not for a binary on a machine. An ffmpeg build with `--enable-gpl` is GPL-2.0-or-later. A `PATH` entry named `espeak` may be espeak-ng.
+8. **Unpinned model wheels and uv.** Licenses in the model tables are for one resolved version on 2026-10-09. uv's dual license was read on `main`; the installer does not pin a revision, and the GitHub license API reports Apache-2.0 only.
