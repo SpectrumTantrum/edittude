@@ -321,3 +321,4 @@ log "  edittude update"
 log
 log "edittude-v3 still runs the same command."
 log "First launch asks for a DeepSeek key (https://platform.deepseek.com)."
+log "Edittude's own code is MIT. See \`LICENSE\` and \`THIRD_PARTY_LICENSES\` in ${PREFIX}."
