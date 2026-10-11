@@ -4,6 +4,7 @@ from __future__ import annotations
 import contextlib
 import io
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -70,7 +71,26 @@ class InstallScriptTest(unittest.TestCase):
             env["EDITTUDE_BIN"] = str(bindir)
             config_home = Path(temporary) / "home"
             env["EDITTUDE_CONFIG_HOME"] = str(config_home)
-            subprocess.check_call(["bash", str(ROOT / "install.sh")], env=env)
+            done = subprocess.run(
+                ["bash", str(ROOT / "install.sh")],
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            notice = (
+                "Edittude's own code is MIT. See `LICENSE` and `THIRD_PARTY_LICENSES` "
+                f"in {ROOT}."
+            )
+            self.assertRegex(done.stdout, rf"(?m)^{re.escape(notice)}$")
+            self.assertLess(
+                done.stdout.index(
+                    "First launch asks for a DeepSeek key (https://platform.deepseek.com)."
+                ),
+                done.stdout.index(notice),
+            )
+            self.assertTrue((ROOT / "LICENSE").is_file())
+            self.assertTrue((ROOT / "THIRD_PARTY_LICENSES").is_file())
             self.assertIn("DEEPSEEK_API_KEY", (config_home / ".env").read_text(encoding="utf-8"))
             launcher = bindir / "edittude"
             alias = bindir / "edittude-v3"
@@ -106,7 +126,16 @@ class InstallScriptTest(unittest.TestCase):
             env["EDITTUDE_BIN"] = str(bindir)
             env["EDITTUDE_CONFIG_HOME"] = str(temporary / "config")
             env["EDITTUDE_SKIP_SYNC"] = "1"
-            subprocess.check_call(["bash", str(home / "install.sh"), "update"], env=env)
+            updated = subprocess.run(
+                ["bash", str(home / "install.sh"), "update"],
+                env=env,
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            self.assertNotIn("Edittude's own code is MIT.", updated.stdout)
+            self.assertNotIn("Installed.", updated.stdout)
+            self.assertNotIn("Installed.", updated.stderr)
 
             self.assertEqual((home / "marker.txt").read_text(encoding="utf-8"), "two")
             self.assertIn("two", _git_output(home, "log", "-1", "--oneline"))
