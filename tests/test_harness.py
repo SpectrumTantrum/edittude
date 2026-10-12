@@ -27,7 +27,7 @@ from rich.console import Console
 
 from edittude_v3.agent import MODEL, build_agent, build_backend
 from edittude_v3.cli import _parser, main
-from edittude_v3.paths import state_dir
+from edittude_v3.paths import install_root, state_dir
 from edittude_v3.skills import list_skill_names, list_skills
 from edittude_v3.tools import list_tool_names, load_workspace_tools
 from edittude_v3.tui import (
@@ -265,6 +265,16 @@ class HarnessTest(unittest.TestCase):
         for token in ("/help", "/quit", "/clear", "enter", "esc", "ctrl+d", "ctrl+c"):
             self.assertIn(token, help_text)
         self.assertNotIn("edittude-v3", help_text)
+        notice = (
+            "Edittude's own code is MIT. See `LICENSE` and `THIRD_PARTY_LICENSES` "
+            f"in {install_root()}."
+        )
+        self.assertLess(help_text.index("history"), help_text.index(notice))
+        self.assertIn(notice, help_text)
+        prefix = install_root()
+        self.assertTrue((prefix / "LICENSE").is_file())
+        self.assertTrue((prefix / "THIRD_PARTY_LICENSES").is_file())
+        self.assertNotIn("Edittude's own code is MIT.", text)
 
     def test_oscura_composer_is_a_rounded_box(self):
         ui = xli.UI(title="edittude", intro="Chronology is the spine.", theme=THEME)
