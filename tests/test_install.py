@@ -410,6 +410,7 @@ class InstallScriptTest(unittest.TestCase):
                 main(["media", "inventory", "-h"])
         self.assertIn("--out", detail.getvalue())
 
+    @patch.dict(os.environ, {"EDITTUDE_ROOT": ""})
     def test_update_command_runs_installer(self):
         self.assertEqual(_parser().parse_args(["update"]).command, "update")
         self.assertTrue(_parser().parse_args(["update", "--force"]).force)
@@ -435,6 +436,33 @@ def _path_notice(name: str) -> str:
         f"Added edittude to PATH in {name} "
         '(remove the line marked "added by edittude/install.sh" to undo).'
     )
+
+
+def _ssh_line(bindir: Path) -> str:
+    return (
+        "Login shells (SSH) need the same export line in ~/.profile: "
+        f'export PATH="{bindir}:$PATH"  # added by edittude/install.sh'
+    )
+
+
+_OLD_HINT = "Add this to your shell profile, then open a new terminal:"
+
+# Ubuntu's bashrc returns before any later lines when the shell is not interactive,
+# so a login shell only sees an export that was written to .profile (or .bash_profile).
+_BASHRC_RETURNS_UNLESS_INTERACTIVE = """# keep
+case $- in
+    *i*) ;;
+      *) return;;
+esac
+"""
+
+_PROFILE_SOURCES_BASHRC = """# keep
+if [ -n "$BASH_VERSION" ]; then
+    if [ -f "$HOME/.bashrc" ]; then
+        . "$HOME/.bashrc"
+    fi
+fi
+"""
 
 
 class PathRcTest(unittest.TestCase):
@@ -464,26 +492,102 @@ class PathRcTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         self.assertEqual(done.stdout.strip().splitlines()[-1], self._mit())
 
-    def test_off_path_appends_one_line_and_prints_the_undo_notice(self):
+    def _assert_no_old_hint(self, done: subprocess.CompletedProcess[str]) -> None:
+        self.assertNotIn(_OLD_HINT, done.stdout)
+
+    def _assert_shell_resolves(self, home: Path, bindir: Path, flag: str) -> None:
+        done = subprocess.run(
+            ["bash", flag, "command -v edittude"],
+            env={"HOME": str(home), "PATH": "/usr/bin:/bin"},
+            stdin=subprocess.DEVNULL,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(done.returncode, 0, f"{flag}\n{done.stdout}\n{done.stderr}")
+        self.assertIn(str(bindir / "edittude"), done.stdout)
+
+    def test_every_existing_rc_file_gets_one_line_and_no_old_hint(self):
         with tempfile.TemporaryDirectory() as temporary:
             temporary = Path(temporary)
             home = temporary / "home"
             bindir = temporary / "bin"
             home.mkdir()
-            for name in (".bashrc", ".zshrc", ".profile"):
+            names = (".bashrc", ".bash_profile", ".profile", ".zshrc")
+            for name in names:
                 (home / name).write_text("# keep\n", encoding="utf-8")
             done = self._install(home, bindir)
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
-            for name in (".bashrc", ".zshrc", ".profile"):
+            self._assert_no_old_hint(done)
+            self.assertNotIn("Login shells (SSH)", done.stdout)
+            for name in names:
                 text = (home / name).read_text(encoding="utf-8")
                 self.assertEqual(text.count(line), 1)
                 self.assertIn("# keep\n", text)
                 self.assertIn(_path_notice(f"~/{name}"), done.stdout)
-            self.assertEqual(done.stdout.count("Added edittude to PATH in "), 3)
+            self.assertEqual(done.stdout.count("Added edittude to PATH in "), 4)
             self.assertLess(done.stdout.index("Added edittude to PATH in "), done.stdout.index(self._mit()))
-            self.assertIn("Add this to your shell profile, then open a new terminal:", done.stdout)
-            self.assertIn(f'export PATH="{bindir}:$PATH"', done.stdout)
+
+    def test_bashrc_and_profile_resolve_for_login_and_interactive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "bin"
+            home.mkdir()
+            (home / ".bashrc").write_text(_BASHRC_RETURNS_UNLESS_INTERACTIVE, encoding="utf-8")
+            (home / ".profile").write_text(_PROFILE_SOURCES_BASHRC, encoding="utf-8")
+            done = self._install(home, bindir)
+            line = _path_line(bindir)
+            self._assert_mit_is_last(done)
+            self._assert_no_old_hint(done)
+            self.assertNotIn("Login shells (SSH)", done.stdout)
+            for name in (".bashrc", ".profile"):
+                text = (home / name).read_text(encoding="utf-8")
+                self.assertEqual(text.count(line), 1)
+                self.assertIn(_path_notice(f"~/{name}"), done.stdout)
+            self.assertFalse((home / ".bash_profile").exists())
+            self.assertFalse((home / ".zshrc").exists())
+            self._assert_shell_resolves(home, bindir, "-ic")
+            self._assert_shell_resolves(home, bindir, "-lc")
+
+    def test_only_bashrc_prints_the_ssh_line(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "bin"
+            home.mkdir()
+            (home / ".bashrc").write_text("# keep\n", encoding="utf-8")
+            done = self._install(home, bindir)
+            line = _path_line(bindir)
+            self._assert_mit_is_last(done)
+            self._assert_no_old_hint(done)
+            text = (home / ".bashrc").read_text(encoding="utf-8")
+            self.assertEqual(text.count(line), 1)
+            self.assertIn(_path_notice("~/.bashrc"), done.stdout)
+            self.assertIn(_ssh_line(bindir), done.stdout)
+            self.assertLess(done.stdout.index("Login shells (SSH)"), done.stdout.index(self._mit()))
+            for name in (".bash_profile", ".profile", ".zshrc"):
+                self.assertFalse((home / name).exists())
+
+    def test_bash_profile_is_edited_and_login_shell_resolves(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "bin"
+            home.mkdir()
+            (home / ".bash_profile").write_text("# keep\n", encoding="utf-8")
+            done = self._install(home, bindir)
+            line = _path_line(bindir)
+            self._assert_mit_is_last(done)
+            self._assert_no_old_hint(done)
+            self.assertNotIn("Login shells (SSH)", done.stdout)
+            text = (home / ".bash_profile").read_text(encoding="utf-8")
+            self.assertEqual(text.count(line), 1)
+            self.assertIn("# keep\n", text)
+            self.assertIn(_path_notice("~/.bash_profile"), done.stdout)
+            for name in (".bashrc", ".profile", ".zshrc"):
+                self.assertFalse((home / name).exists())
+            self._assert_shell_resolves(home, bindir, "-lc")
 
     def test_rerun_does_not_duplicate_the_line_or_the_notice(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -500,7 +604,12 @@ class PathRcTest(unittest.TestCase):
             self._assert_mit_is_last(second)
             self.assertEqual(text.count(line), 1)
             self.assertIn(_path_notice("~/.bashrc"), first.stdout)
+            self.assertIn(_ssh_line(bindir), first.stdout)
+            self._assert_no_old_hint(first)
             self.assertNotIn("Added edittude to PATH in ", second.stdout)
+            self.assertNotIn("Login shells (SSH)", second.stdout)
+            self.assertIn(_OLD_HINT, second.stdout)
+            self.assertIn(f'  export PATH="{bindir}:$PATH"', second.stdout)
 
     def test_already_on_path_leaves_the_rc_file_alone(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -515,19 +624,25 @@ class PathRcTest(unittest.TestCase):
             self._assert_mit_is_last(done)
             self.assertEqual((home / ".bashrc").read_text(encoding="utf-8"), original)
             self.assertNotIn("Added edittude to PATH in ", done.stdout)
-            self.assertFalse((home / ".zshrc").exists())
-            self.assertFalse((home / ".profile").exists())
+            self._assert_no_old_hint(done)
+            self.assertNotIn("Login shells (SSH)", done.stdout)
+            for name in (".bash_profile", ".zshrc", ".profile"):
+                self.assertFalse((home / name).exists())
 
     def test_missing_rc_files_are_not_created(self):
         with tempfile.TemporaryDirectory() as temporary:
             temporary = Path(temporary)
             home = temporary / "home"
+            bindir = temporary / "bin"
             home.mkdir()
-            done = self._install(home, temporary / "bin")
+            done = self._install(home, bindir)
             self._assert_mit_is_last(done)
-            for name in (".bashrc", ".zshrc", ".profile"):
+            for name in (".bashrc", ".bash_profile", ".zshrc", ".profile"):
                 self.assertFalse((home / name).exists())
             self.assertNotIn("Added edittude to PATH in ", done.stdout)
+            self.assertNotIn("Login shells (SSH)", done.stdout)
+            self.assertIn(_OLD_HINT, done.stdout)
+            self.assertIn(f'  export PATH="{bindir}:$PATH"', done.stdout)
 
     def test_custom_edittude_bin_is_what_gets_written(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -539,9 +654,12 @@ class PathRcTest(unittest.TestCase):
             done = self._install(home, bindir)
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
+            self._assert_no_old_hint(done)
             self.assertEqual((home / ".bashrc").read_text(encoding="utf-8").count(line), 1)
             self.assertIn(_path_notice("~/.bashrc"), done.stdout)
+            self.assertIn(_ssh_line(bindir), done.stdout)
             self.assertNotIn(str(home / ".local" / "bin"), (home / ".bashrc").read_text(encoding="utf-8"))
+            self.assertNotIn(str(home / ".local" / "bin"), done.stdout)
 
 
 if __name__ == "__main__":

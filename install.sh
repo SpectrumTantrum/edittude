@@ -224,6 +224,7 @@ path_contains() {
 }
 
 # Append the launcher directory to an rc file the user already has. Never create one.
+# PATH_LINES_EDITED and PATH_EDITED_BASHRC count what this run actually changed.
 remember_bin_dir() {
   local rc="$1"
   local line shown
@@ -235,6 +236,10 @@ remember_bin_dir() {
     return 0
   fi
   printf '\n%s\n' "$line" >> "$rc"
+  PATH_LINES_EDITED=$((PATH_LINES_EDITED + 1))
+  if [ "$rc" = "${HOME}/.bashrc" ]; then
+    PATH_EDITED_BASHRC=1
+  fi
   case "$rc" in
     "$HOME"/*) shown="~/${rc#"$HOME"/}" ;;
     *) shown="$rc" ;;
@@ -322,11 +327,21 @@ if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; 
 fi
 
 if ! path_contains "$BIN_DIR"; then
+  PATH_LINES_EDITED=0
+  PATH_EDITED_BASHRC=0
   remember_bin_dir "${HOME}/.bashrc"
-  remember_bin_dir "${HOME}/.zshrc"
+  remember_bin_dir "${HOME}/.bash_profile"
   remember_bin_dir "${HOME}/.profile"
-  log "Add this to your shell profile, then open a new terminal:"
-  log "  export PATH=\"${BIN_DIR}:\$PATH\""
+  remember_bin_dir "${HOME}/.zshrc"
+  if [ "$PATH_LINES_EDITED" -eq 0 ]; then
+    log "Add this to your shell profile, then open a new terminal:"
+    log "  export PATH=\"${BIN_DIR}:\$PATH\""
+  elif [ "$PATH_LINES_EDITED" -eq 1 ] && [ "$PATH_EDITED_BASHRC" -eq 1 ]; then
+    # Login bash reads .bash_profile or .profile, not .bashrc. An Ubuntu .bashrc
+    # also returns immediately when it is not interactive, so a line only there
+    # never runs over SSH.
+    log "Login shells (SSH) need the same export line in ~/.profile: export PATH=\"${BIN_DIR}:\$PATH\"  # added by edittude/install.sh"
+  fi
 fi
 
 if [ "$UPDATE" -eq 1 ]; then
