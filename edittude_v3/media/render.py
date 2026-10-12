@@ -125,6 +125,8 @@ def _encode_event(event: Event, dest: Path, width: int, height: int, fit: str = 
         vf,
         "-frames:v",
         str(frames),
+        "-video_track_timescale",
+        str(fps),
         "-c:v",
         "libx264",
         "-preset",
