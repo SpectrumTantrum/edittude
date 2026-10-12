@@ -1,10 +1,13 @@
 """Run with python -m unittest discover -s tests -p test_model_paths.py."""
 from __future__ import annotations
 
+from contextlib import redirect_stdout
 from fnmatch import fnmatch
+import io
 import json
 import os
 from pathlib import Path
+import subprocess
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -148,6 +151,107 @@ class InstallFailureTest(unittest.TestCase):
             install_models._clone(spec, Path("/nowhere/clone"))
         self.assertIn("no-such-backend.patch", str(raised.exception))
         run.assert_not_called()
+
+
+class SeedVcFetchNoticeTest(unittest.TestCase):
+    """The GPL line is one print, immediately before a real Seed-VC fetch, and nowhere else."""
+
+    NOTICE = ("Downloading Seed-VC (GPL-3.0, separate from Edittude's MIT code). "
+              "See THIRD_PARTY_LICENSES.")
+
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.root = Path(self.temporary.name).resolve()
+        self.environment = patch.dict(os.environ, {**UNSET, "EDITTUDE_ROOT": str(self.root)})
+        self.environment.start()
+        self.addCleanup(self.environment.stop)
+        self.stdout = io.StringIO()
+        # A previous install() in this process must not swallow a later real fetch.
+        install_models._seed_vc_notice_sent = True
+
+    def _git(self, command, **kwargs):
+        parts = [str(part) for part in command]
+        stdout = ""
+        if "rev-parse" in parts:
+            into = Path(parts[parts.index("-C") + 1]).name
+            sha = next(backend["git"]["sha"] for backend in install_models.BACKENDS.values()
+                       if backend.get("git", {}).get("into") == into)
+            stdout = sha + "\n"
+        # returncode 0 on `git apply --reverse --check` means the patch is already applied.
+        return subprocess.CompletedProcess(parts, 0, stdout, "")
+
+    def _install(self, names, side_effect=None):
+        with redirect_stdout(self.stdout), \
+                patch.object(install_models, "_venv"), \
+                patch.object(install_models, "V2_MODELS", self.root / "no-v2-models"), \
+                patch.object(install_models.subprocess, "run", self._git), \
+                patch.object(install_models, "_run", side_effect=side_effect) as run:
+            install_models.install(names)
+        return run
+
+    def _seed_weights(self, *, skip_repo=None):
+        for entry in install_models.BACKENDS["seed-vc"]["hf"]:
+            if entry["repo"] == skip_repo:
+                continue
+            destination = self.root / "models" / entry["into"]
+            if entry.get("cache"):
+                slug = "models--" + entry["repo"].replace("/", "--")
+                folder = destination / slug / "snapshots" / entry["rev"]
+            else:
+                folder = destination
+            folder.mkdir(parents=True, exist_ok=True)
+            for pattern in entry["files"]:
+                (folder / pattern.replace("*", "x")).write_bytes(b"x")
+
+    def _seed_clone(self, into):
+        (self.root / "models" / into / ".git").mkdir(parents=True)
+
+    def test_fetch_prints_the_notice_once_before_the_clone(self):
+        calls = []
+
+        def record(command):
+            calls.append(([str(part) for part in command], self.stdout.getvalue()))
+
+        self._install(["seed-vc"], record)
+        output = self.stdout.getvalue()
+        clones = [item for item in calls if item[0][:2] == ["git", "clone"]]
+        snapshots = [item for item in calls if any("snapshot_download" in part for part in item[0])]
+        self.assertEqual(len(clones), 1)
+        self.assertEqual(clones[0][1].count(self.NOTICE), 1)
+        self.assertEqual(output.count(self.NOTICE), 1)
+        self.assertEqual(len(snapshots), 5)
+        for snapshot in snapshots:
+            self.assertEqual(snapshot[1].count(self.NOTICE), 1)
+
+    def test_cached_install_is_silent_and_does_not_fetch(self):
+        self._seed_clone("seed-vc")
+        self._seed_weights()
+        run = self._install(["seed-vc"])
+        run.assert_not_called()
+        self.assertNotIn(self.NOTICE, self.stdout.getvalue())
+
+    def test_partial_cache_prints_the_notice_once_before_the_missing_weight(self):
+        missing = "nvidia/bigvgan_v2_44khz_128band_512x"
+        self._seed_clone("seed-vc")
+        self._seed_weights(skip_repo=missing)
+        calls = []
+
+        def record(command):
+            self.assertEqual(self.stdout.getvalue().splitlines()[-1], self.NOTICE)
+            calls.append([str(part) for part in command])
+
+        self._install(["seed-vc"], record)
+        self.assertEqual(len(calls), 1)
+        self.assertIn("snapshot_download", calls[0][2])
+        self.assertEqual(json.loads(calls[0][-1])["repo_id"], missing)
+        self.assertEqual(self.stdout.getvalue().count(self.NOTICE), 1)
+
+    def test_diffsinger_install_does_not_print_the_seed_vc_notice(self):
+        run = self._install(["diffsinger"])
+        self.assertGreaterEqual(run.call_count, 1)
+        self.assertNotIn(self.NOTICE, self.stdout.getvalue())
+        self.assertIn("non-commercial use only", self.stdout.getvalue())
 
 
 if __name__ == "__main__":
