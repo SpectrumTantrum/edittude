@@ -68,6 +68,8 @@ class InstallScriptTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temporary:
             bindir = Path(temporary) / "bin"
             env = os.environ.copy()
+            env["HOME"] = str(Path(temporary) / "userhome")
+            Path(env["HOME"]).mkdir()
             env["EDITTUDE_BIN"] = str(bindir)
             config_home = Path(temporary) / "home"
             env["EDITTUDE_CONFIG_HOME"] = str(config_home)
@@ -123,6 +125,8 @@ class InstallScriptTest(unittest.TestCase):
             _commit(origin, "two")
 
             env = _git_env()
+            env["HOME"] = str(temporary / "userhome")
+            Path(env["HOME"]).mkdir()
             env["EDITTUDE_BIN"] = str(bindir)
             env["EDITTUDE_CONFIG_HOME"] = str(temporary / "config")
             env["EDITTUDE_SKIP_SYNC"] = "1"
@@ -157,6 +161,8 @@ class InstallScriptTest(unittest.TestCase):
             (home / "marker.txt").write_text("dirty", encoding="utf-8")
 
             env = _git_env()
+            env["HOME"] = str(temporary / "userhome")
+            Path(env["HOME"]).mkdir()
             env["EDITTUDE_BIN"] = str(temporary / "bin")
             env["EDITTUDE_CONFIG_HOME"] = str(temporary / "config")
             env["EDITTUDE_SKIP_SYNC"] = "1"
@@ -178,6 +184,9 @@ class InstallScriptTest(unittest.TestCase):
 
     def _launcher_env(self, temporary: Path, bindir: Path) -> dict[str, str]:
         env = _git_env()
+        home = temporary / "userhome"
+        home.mkdir(exist_ok=True)
+        env["HOME"] = str(home)
         env["EDITTUDE_BIN"] = str(bindir)
         env["EDITTUDE_CONFIG_HOME"] = str(temporary / "config")
         env["EDITTUDE_SKIP_SYNC"] = "1"
@@ -415,6 +424,124 @@ class InstallScriptTest(unittest.TestCase):
             run.return_value = subprocess.CompletedProcess(args=[], returncode=0)
             main(["update", "--force"])
             self.assertEqual(run.call_args.kwargs["env"]["EDITTUDE_FORCE"], "1")
+
+
+def _path_line(bindir: Path) -> str:
+    return f'export PATH="{bindir}:$PATH"  # added by edittude/install.sh'
+
+
+def _path_notice(name: str) -> str:
+    return (
+        f"Added edittude to PATH in {name} "
+        '(remove the line marked "added by edittude/install.sh" to undo).'
+    )
+
+
+class PathRcTest(unittest.TestCase):
+    """BIN_DIR is recorded only in rc files that already exist, and only once."""
+
+    def _install(self, home: Path, bindir: Path, *, path: str | None = None) -> subprocess.CompletedProcess[str]:
+        env = os.environ.copy()
+        env["HOME"] = str(home)
+        env["EDITTUDE_BIN"] = str(bindir)
+        env["EDITTUDE_CONFIG_HOME"] = str(home / "config")
+        env["EDITTUDE_SKIP_SYNC"] = "1"
+        env["PATH"] = path if path is not None else os.environ.get("PATH", "/usr/bin:/bin")
+        return subprocess.run(
+            ["bash", str(ROOT / "install.sh")],
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+
+    def _mit(self) -> str:
+        return (
+            "Edittude's own code is MIT. See `LICENSE` and `THIRD_PARTY_LICENSES` "
+            f"in {ROOT}."
+        )
+
+    def _assert_mit_is_last(self, done: subprocess.CompletedProcess[str]) -> None:
+        self.assertEqual(done.returncode, 0, done.stderr)
+        self.assertEqual(done.stdout.strip().splitlines()[-1], self._mit())
+
+    def test_off_path_appends_one_line_and_prints_the_undo_notice(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "bin"
+            home.mkdir()
+            for name in (".bashrc", ".zshrc", ".profile"):
+                (home / name).write_text("# keep\n", encoding="utf-8")
+            done = self._install(home, bindir)
+            line = _path_line(bindir)
+            self._assert_mit_is_last(done)
+            for name in (".bashrc", ".zshrc", ".profile"):
+                text = (home / name).read_text(encoding="utf-8")
+                self.assertEqual(text.count(line), 1)
+                self.assertIn("# keep\n", text)
+                self.assertIn(_path_notice(f"~/{name}"), done.stdout)
+            self.assertEqual(done.stdout.count("Added edittude to PATH in "), 3)
+            self.assertLess(done.stdout.index("Added edittude to PATH in "), done.stdout.index(self._mit()))
+            self.assertIn("Add this to your shell profile, then open a new terminal:", done.stdout)
+            self.assertIn(f'export PATH="{bindir}:$PATH"', done.stdout)
+
+    def test_rerun_does_not_duplicate_the_line_or_the_notice(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "bin"
+            home.mkdir()
+            (home / ".bashrc").write_text("# keep\n", encoding="utf-8")
+            first = self._install(home, bindir)
+            second = self._install(home, bindir)
+            line = _path_line(bindir)
+            text = (home / ".bashrc").read_text(encoding="utf-8")
+            self._assert_mit_is_last(first)
+            self._assert_mit_is_last(second)
+            self.assertEqual(text.count(line), 1)
+            self.assertIn(_path_notice("~/.bashrc"), first.stdout)
+            self.assertNotIn("Added edittude to PATH in ", second.stdout)
+
+    def test_already_on_path_leaves_the_rc_file_alone(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "bin"
+            home.mkdir()
+            bindir.mkdir()
+            original = "# keep\n"
+            (home / ".bashrc").write_text(original, encoding="utf-8")
+            done = self._install(home, bindir, path=f"{bindir}{os.pathsep}{os.environ.get('PATH', '/usr/bin:/bin')}")
+            self._assert_mit_is_last(done)
+            self.assertEqual((home / ".bashrc").read_text(encoding="utf-8"), original)
+            self.assertNotIn("Added edittude to PATH in ", done.stdout)
+            self.assertFalse((home / ".zshrc").exists())
+            self.assertFalse((home / ".profile").exists())
+
+    def test_missing_rc_files_are_not_created(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            home.mkdir()
+            done = self._install(home, temporary / "bin")
+            self._assert_mit_is_last(done)
+            for name in (".bashrc", ".zshrc", ".profile"):
+                self.assertFalse((home / name).exists())
+            self.assertNotIn("Added edittude to PATH in ", done.stdout)
+
+    def test_custom_edittude_bin_is_what_gets_written(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            temporary = Path(temporary)
+            home = temporary / "home"
+            bindir = temporary / "custom" / "edittude-bin"
+            home.mkdir()
+            (home / ".bashrc").write_text("# keep\n", encoding="utf-8")
+            done = self._install(home, bindir)
+            line = _path_line(bindir)
+            self._assert_mit_is_last(done)
+            self.assertEqual((home / ".bashrc").read_text(encoding="utf-8").count(line), 1)
+            self.assertIn(_path_notice("~/.bashrc"), done.stdout)
+            self.assertNotIn(str(home / ".local" / "bin"), (home / ".bashrc").read_text(encoding="utf-8"))
 
 
 if __name__ == "__main__":

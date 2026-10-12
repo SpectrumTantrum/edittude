@@ -223,6 +223,25 @@ path_contains() {
   esac
 }
 
+# Append the launcher directory to an rc file the user already has. Never create one.
+remember_bin_dir() {
+  local rc="$1"
+  local line shown
+  line="export PATH=\"${BIN_DIR}:\$PATH\"  # added by edittude/install.sh"
+  if [ ! -f "$rc" ]; then
+    return 0
+  fi
+  if grep -qxF "$line" "$rc"; then
+    return 0
+  fi
+  printf '\n%s\n' "$line" >> "$rc"
+  case "$rc" in
+    "$HOME"/*) shown="~/${rc#"$HOME"/}" ;;
+    *) shown="$rc" ;;
+  esac
+  log "Added edittude to PATH in ${shown} (remove the line marked \"added by edittude/install.sh\" to undo)."
+}
+
 UPDATE=0
 FORCE=0
 WITH_MODELS=""
@@ -303,6 +322,9 @@ if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; 
 fi
 
 if ! path_contains "$BIN_DIR"; then
+  remember_bin_dir "${HOME}/.bashrc"
+  remember_bin_dir "${HOME}/.zshrc"
+  remember_bin_dir "${HOME}/.profile"
   log "Add this to your shell profile, then open a new terminal:"
   log "  export PATH=\"${BIN_DIR}:\$PATH\""
 fi
