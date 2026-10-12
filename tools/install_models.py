@@ -106,6 +106,23 @@ BACKENDS = {
     },
 }
 
+# Printed once per install(), and only when Seed-VC itself is about to be fetched.
+# DiffSinger's notice field is unconditional; this one must stay off the cache path.
+_SEED_VC_NOTICE = (
+    "Downloading Seed-VC (GPL-3.0, separate from Edittude's MIT code). "
+    "See THIRD_PARTY_LICENSES."
+)
+_seed_vc_notice_sent = False
+
+
+def _note_seed_vc_download() -> None:
+    """One GPL line per install(), immediately before Seed-VC bytes move."""
+    global _seed_vc_notice_sent
+    if _seed_vc_notice_sent:
+        return
+    print(_SEED_VC_NOTICE)
+    _seed_vc_notice_sent = True
+
 
 def _uv() -> str:
     found = shutil.which("uv") or str(Path.home() / ".local/bin/uv")
@@ -218,6 +235,8 @@ def _snapshot(entry: dict, destination: Path) -> None:
     else:
         # Downloads run inside the model venv, not the agent venv, which never gains torch.
         print(f"fetch  {label}")
+        if entry["into"] == "seed-vc" or entry["into"].startswith("seed-vc/"):
+            _note_seed_vc_download()
         _run([model_python(), "-c", "import json, sys; from huggingface_hub import snapshot_download;"
               " snapshot_download(**json.loads(sys.argv[1]))",
               json.dumps({"repo_id": entry["repo"], "revision": entry["rev"],
@@ -238,6 +257,8 @@ def _clone(spec: dict, destination: Path) -> None:
         raise SystemExit(f"Missing patch {patch}")
     if not (destination / ".git").is_dir():
         print(f"clone  {spec['url']}")
+        if spec["into"] == "seed-vc":
+            _note_seed_vc_download()
         _run(["git", "clone", "--quiet", spec["url"], destination])
     git = ["git", "-C", str(destination)]
     if subprocess.run([*git, "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip() != spec["sha"]:
@@ -248,6 +269,8 @@ def _clone(spec: dict, destination: Path) -> None:
 
 
 def install(names: list[str]) -> None:
+    global _seed_vc_notice_sent
+    _seed_vc_notice_sent = False  # A later install that actually fetches must speak again.
     total = sum(BACKENDS[name]["size_gb"] for name in names)
     print(f"Installing {', '.join(names)}: about {total:.2f} GB of weights "
           f"plus about 2.5 GB of torch runtime into {install_root()}")
