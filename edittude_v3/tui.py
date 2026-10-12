@@ -23,7 +23,7 @@ from rich.text import Text
 from edittude_v3 import APP_NAME, __version__
 from edittude_v3.agent import build_agent, model_label
 from edittude_v3.events import iter_turn, preview
-from edittude_v3.paths import state_dir
+from edittude_v3.paths import install_root, state_dir
 from edittude_v3.skills import list_skill_names
 from edittude_v3.tools import list_tool_names
 
@@ -157,6 +157,10 @@ def _help_text(ui: xli.UI) -> Text:
     ):
         text.append(f"  {key:<22}", style=f"bold {TEXT}")
         text.append(label + "\n", style="dim")
+    text.append(
+        "\nEdittude's own code is MIT. See `LICENSE` and "
+        f"`THIRD_PARTY_LICENSES` in {install_root()}.\n"
+    )
     return text
 
 
