@@ -446,6 +446,7 @@ def _ssh_line(bindir: Path) -> str:
 
 
 _OLD_HINT = "Add this to your shell profile, then open a new terminal:"
+_ALREADY_SET_UP = "edittude is already set up on PATH."
 
 # Ubuntu's bashrc returns before any later lines when the shell is not interactive,
 # so a login shell only sees an export that was written to .profile (or .bash_profile).
@@ -519,6 +520,7 @@ class PathRcTest(unittest.TestCase):
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
             self._assert_no_old_hint(done)
+            self.assertNotIn(_ALREADY_SET_UP, done.stdout)
             self.assertNotIn("Login shells (SSH)", done.stdout)
             for name in names:
                 text = (home / name).read_text(encoding="utf-8")
@@ -540,6 +542,7 @@ class PathRcTest(unittest.TestCase):
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
             self._assert_no_old_hint(done)
+            self.assertNotIn(_ALREADY_SET_UP, done.stdout)
             self.assertNotIn("Login shells (SSH)", done.stdout)
             for name in (".bashrc", ".profile"):
                 text = (home / name).read_text(encoding="utf-8")
@@ -561,6 +564,7 @@ class PathRcTest(unittest.TestCase):
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
             self._assert_no_old_hint(done)
+            self.assertNotIn(_ALREADY_SET_UP, done.stdout)
             text = (home / ".bashrc").read_text(encoding="utf-8")
             self.assertEqual(text.count(line), 1)
             self.assertIn(_path_notice("~/.bashrc"), done.stdout)
@@ -580,6 +584,7 @@ class PathRcTest(unittest.TestCase):
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
             self._assert_no_old_hint(done)
+            self.assertNotIn(_ALREADY_SET_UP, done.stdout)
             self.assertNotIn("Login shells (SSH)", done.stdout)
             text = (home / ".bash_profile").read_text(encoding="utf-8")
             self.assertEqual(text.count(line), 1)
@@ -608,8 +613,10 @@ class PathRcTest(unittest.TestCase):
             self._assert_no_old_hint(first)
             self.assertNotIn("Added edittude to PATH in ", second.stdout)
             self.assertNotIn("Login shells (SSH)", second.stdout)
-            self.assertIn(_OLD_HINT, second.stdout)
-            self.assertIn(f'  export PATH="{bindir}:$PATH"', second.stdout)
+            self.assertNotIn(_OLD_HINT, second.stdout)
+            self.assertNotIn(_ALREADY_SET_UP, first.stdout)
+            self.assertIn(_ALREADY_SET_UP, second.stdout)
+            self.assertLess(second.stdout.index(_ALREADY_SET_UP), second.stdout.index(self._mit()))
 
     def test_already_on_path_leaves_the_rc_file_alone(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -626,6 +633,8 @@ class PathRcTest(unittest.TestCase):
             self.assertNotIn("Added edittude to PATH in ", done.stdout)
             self._assert_no_old_hint(done)
             self.assertNotIn("Login shells (SSH)", done.stdout)
+            self.assertIn(_ALREADY_SET_UP, done.stdout)
+            self.assertLess(done.stdout.index(_ALREADY_SET_UP), done.stdout.index(self._mit()))
             for name in (".bash_profile", ".zshrc", ".profile"):
                 self.assertFalse((home / name).exists())
 
@@ -641,6 +650,7 @@ class PathRcTest(unittest.TestCase):
                 self.assertFalse((home / name).exists())
             self.assertNotIn("Added edittude to PATH in ", done.stdout)
             self.assertNotIn("Login shells (SSH)", done.stdout)
+            self.assertNotIn(_ALREADY_SET_UP, done.stdout)
             self.assertIn(_OLD_HINT, done.stdout)
             self.assertIn(f'  export PATH="{bindir}:$PATH"', done.stdout)
 
@@ -655,6 +665,7 @@ class PathRcTest(unittest.TestCase):
             line = _path_line(bindir)
             self._assert_mit_is_last(done)
             self._assert_no_old_hint(done)
+            self.assertNotIn(_ALREADY_SET_UP, done.stdout)
             self.assertEqual((home / ".bashrc").read_text(encoding="utf-8").count(line), 1)
             self.assertIn(_path_notice("~/.bashrc"), done.stdout)
             self.assertIn(_ssh_line(bindir), done.stdout)

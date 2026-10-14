@@ -2,18 +2,41 @@
 from __future__ import annotations
 
 import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
 from edittude_v3.media.core import MediaError, ffmpeg
-from edittude_v3.media.inventory import _thumb_positions, extract_thumbs
+from edittude_v3.media.inventory import _thumb_positions, build_inventory, extract_thumbs
 from edittude_v3.media.render import _escape_filter_path
 from edittude_v3.media.titlecard import write_title_png
 
 
 class MediaInputsTest(unittest.TestCase):
+    def test_missing_footage_folder_exits_with_one_line(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            missing = root / "no-such-footage"
+            out = root / "inventory.json"
+            with self.assertRaises(MediaError) as raised:
+                build_inventory(missing)
+            message = f"{missing.resolve()}: no such footage folder"
+            self.assertEqual(str(raised.exception), message)
+            done = subprocess.run(
+                [sys.executable, "-m", "edittude_v3", "media", "inventory", str(missing), "--out", str(out)],
+                capture_output=True,
+                text=True,
+                cwd=root,
+            )
+            self.assertEqual(done.returncode, 1, done.stderr)
+            self.assertEqual(done.stdout, "")
+            self.assertEqual(done.stderr.splitlines(), [message])
+            self.assertNotIn("Traceback", done.stderr)
+            self.assertFalse(out.exists())
+
     def test_thumbs_keep_clips_with_the_same_stem_apart(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)

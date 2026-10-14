@@ -105,7 +105,7 @@ def describe_clip(path: Path) -> dict[str, Any]:
 def build_inventory(folder: Path) -> dict[str, Any]:
     folder = folder.expanduser().resolve()
     if not folder.is_dir():
-        raise FileNotFoundError(folder)
+        raise MediaError(f"{folder}: no such footage folder")
     clips = [describe_clip(path) for path in iter_media(folder)]
     videos = [c for c in clips if c["kind"] == "video"]
     audios = [c for c in clips if c["kind"] == "audio"]
