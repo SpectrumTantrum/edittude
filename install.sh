@@ -225,6 +225,7 @@ path_contains() {
 
 # Append the launcher directory to an rc file the user already has. Never create one.
 # PATH_LINES_EDITED and PATH_EDITED_BASHRC count what this run actually changed.
+# PATH_LINE_PRESENT is set when an existing file already has the line.
 remember_bin_dir() {
   local rc="$1"
   local line shown
@@ -233,6 +234,7 @@ remember_bin_dir() {
     return 0
   fi
   if grep -qxF "$line" "$rc"; then
+    PATH_LINE_PRESENT=1
     return 0
   fi
   printf '\n%s\n' "$line" >> "$rc"
@@ -326,16 +328,23 @@ if ! command -v ffmpeg >/dev/null 2>&1 || ! command -v ffprobe >/dev/null 2>&1; 
   fi
 fi
 
-if ! path_contains "$BIN_DIR"; then
+if path_contains "$BIN_DIR"; then
+  log "edittude is already set up on PATH."
+else
   PATH_LINES_EDITED=0
   PATH_EDITED_BASHRC=0
+  PATH_LINE_PRESENT=0
   remember_bin_dir "${HOME}/.bashrc"
   remember_bin_dir "${HOME}/.bash_profile"
   remember_bin_dir "${HOME}/.profile"
   remember_bin_dir "${HOME}/.zshrc"
   if [ "$PATH_LINES_EDITED" -eq 0 ]; then
-    log "Add this to your shell profile, then open a new terminal:"
-    log "  export PATH=\"${BIN_DIR}:\$PATH\""
+    if [ "$PATH_LINE_PRESENT" -eq 1 ]; then
+      log "edittude is already set up on PATH."
+    else
+      log "Add this to your shell profile, then open a new terminal:"
+      log "  export PATH=\"${BIN_DIR}:\$PATH\""
+    fi
   elif [ "$PATH_LINES_EDITED" -eq 1 ] && [ "$PATH_EDITED_BASHRC" -eq 1 ]; then
     # Login bash reads .bash_profile or .profile, not .bashrc. An Ubuntu .bashrc
     # also returns immediately when it is not interactive, so a line only there
