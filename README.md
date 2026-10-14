@@ -12,6 +12,8 @@ curl -LsSf https://raw.githubusercontent.com/SpectrumTantrum/edittude/main/insta
 
 That installs `uv` if needed, syncs the project, and puts `edittude` in `~/.local/bin`. From a checkout you can run `./install.sh` instead. Later, `edittude update` refreshes that same install. A checkout that already lives in `~/.local/share/edittude-v3` stays there. New installs clone to `~/.local/share/edittude`.
 
+This path does not download the neural models. A first install that still needs `uv` and CPython downloads about 85 MB on Linux x86_64 and about 66 MB on macOS arm64. An install that already has `uv` and Python downloads only the clone and the wheels. Measured Oct 14, 2026, on a fresh install; sizes may drift as dependencies update.
+
 ffmpeg and ffprobe must be on PATH. On a Mac: `brew install ffmpeg`.
 
 First launch asks for a DeepSeek API key and writes it to `~/.config/edittude/.env`. If `~/.config/edittude-v3/.env` already exists, it is copied once and left in place. Get a key from [https://platform.deepseek.com](https://platform.deepseek.com). The app reads the new file, and `DEEPSEEK_API_KEY` if it is already in the environment. After that copy, the new file is the one to edit.
@@ -70,16 +72,20 @@ edittude-media models install --models seed-vc,diffsinger
 edittude-media models install --check               # status only, no network
 ```
 
-That creates a separate `.venv-models` (Python 3.11, torch) beside the install and puts weights in `models/`; the agent's own virtualenv is untouched. Budget about 2.5 GB for the torch runtime plus the weights for whichever backends you pick. Override locations with `EDITTUDE_MODELS_DIR`, `EDITTUDE_MODEL_PYTHON`, or the per-backend `EDITTUDE_*` variables.
+`--with-models` and `edittude-media models install` install `asr` and `separation` only. `seed-vc` and `diffsinger` stay out of that list until you name them. Either way the installer creates a separate `.venv-models` (Python 3.11) beside the install and puts weights in `models/`. The agent's own virtualenv is untouched. Override locations with `EDITTUDE_MODELS_DIR`, `EDITTUDE_MODEL_PYTHON`, or the per-backend `EDITTUDE_*` variables.
 
+The shared runtime is PyPI `torch==2.8.0` and `torchaudio==2.8.0` (`torch>=2.6,<2.9`). On Linux x86_64 it pulls the CUDA 12 libraries. On macOS arm64 it does not.
 
-| backend      | tool                 | weights      | notes                          |
-| ------------ | -------------------- | ------------ | ------------------------------ |
-| `asr`        | `speech_transcribe`  | ~0.15 GB     | default                        |
-| `separation` | `audio_separate`     | ~0.1-0.35 GB | default                        |
-| `seed-vc`    | `voice_convert`      | ~2.5 GB      | explicit opt-in                |
-| `diffsinger` | `singing_synthesize` | ~0.5 GB      | explicit opt-in, Mandarin only |
+`--with-models` downloads about 4.3 GB on Linux x86_64 and about 400 MB on macOS arm64. That includes the runtime, the weights, and CPython 3.11 when it is missing. Weights are the same on every platform. The two explicit backends also clone upstream source.
 
+| backend | tool | download | when |
+| --- | --- | --- | --- |
+| `asr` | `speech_transcribe` | about 150 MB of weights | default opt-in (`--with-models`) |
+| `separation` | `audio_separate` | about 85 MB of weights | default opt-in (`--with-models`) |
+| `seed-vc` | `voice_convert` | about 2.5 GB of weights | only when named |
+| `diffsinger` | `singing_synthesize` | about 460 MB of weights | only when named; Mandarin only |
+
+Measured Oct 14, 2026, on a fresh install; sizes may drift as dependencies update.
 
 `seed-vc` and `diffsinger` stay out of the default list because they are large and carry terms of their own:
 
@@ -88,9 +94,9 @@ That creates a separate `.venv-models` (Python 3.11, torch) beside the install a
 
 The singing feature (`singing_synthesize`) is for non-commercial use only.
 
-`voice_convert` also downloads `rmvpe.pt`, whose license file states research use only.
+`voice_convert` also downloads `rmvpe.pt`, included in the seed-vc weight total above. Its license file states research use only.
 
-Both are fetched at install time and never committed. Everything runs offline afterwards.
+Those two backends are fetched only when you name them, and they are never committed. Everything runs offline afterwards.
 
 ## License
 

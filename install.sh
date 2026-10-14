@@ -267,10 +267,11 @@ while [ $# -gt 0 ]; do
     -h|--help)
       log "Usage: install.sh [update] [--force] [--with-models[=LIST]]"
       log "  --with-models[=LIST]  also install the neural backends (default: asr,separation)"
-      log "                        about 2.7 GB: torch runtime plus pinned weights"
+      log "                        about 4.3 GB on Linux x86_64, about 400 MB on macOS arm64"
       log "                        LIST names: asr, separation, seed-vc, diffsinger"
-      log "                        seed-vc (GPL-3.0, ~2.5 GB) and diffsinger (non-commercial"
-      log "                        checkpoint, ~0.5 GB) are opt-in only"
+      log "                        seed-vc (GPL-3.0, about 2.5 GB of weights) and diffsinger"
+      log "                        (non-commercial checkpoint, about 460 MB of weights) are opt-in only"
+      log "                        Measured Oct 14, 2026, on a fresh install; sizes may drift as dependencies update."
       exit 0
       ;;
     *) die "Unknown argument: $1. Try: ./install.sh or ./install.sh update" ;;
@@ -293,7 +294,7 @@ if [ "${EDITTUDE_SKIP_SYNC:-}" != "1" ]; then
 fi
 
 if [ -n "$WITH_MODELS" ]; then
-  info "Installing neural backends (${WITH_MODELS}); this downloads a few GB"
+  info "Installing neural backends (${WITH_MODELS}); shared runtime is about 3.9 GB on Linux x86_64 or about 110 MB on macOS arm64"
   EDITTUDE_ROOT="$PREFIX" "$UV_BIN" run --project "$PREFIX" \
     edittude-media models install --models "$WITH_MODELS"
 fi
