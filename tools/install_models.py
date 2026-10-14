@@ -41,14 +41,16 @@ _REMOTE = "https://raw.githubusercontent.com/facebookresearch/demucs/e976d93ecc3
 # git entries clone {url} at {sha} into {into} and apply tools/patches/<into>.patch.
 BACKENDS = {
     "asr": {
-        "tool": "speech_transcribe", "deps": ["faster-whisper>=1.2,<2"], "size_gb": 0.15,
+        "tool": "speech_transcribe", "deps": ["faster-whisper>=1.2,<2"],
+        "size": "147.9 MB of weights",
         "hf": [{"repo": "Systran/faster-whisper-base", "into": "asr/faster-whisper-base",
                 "rev": "ebe41f70d5b6dfa9166e2c581c45c9c0cfc57b66",
                 "files": ["model.bin", "config.json", "tokenizer.json", "vocabulary.txt"]}],
         "files": [],
     },
     "separation": {
-        "tool": "audio_separate", "deps": ["demucs>=4.1,<5"], "size_gb": 0.1, "hf": [],
+        "tool": "audio_separate", "deps": ["demucs>=4.1,<5"],
+        "size": "84.1 MB of weights", "hf": [],
         # htdemucs.yaml is a bag of exactly one signature: 955717e8.
         "files": [
             ("demucs/htdemucs.yaml", _REMOTE + "htdemucs.yaml",
@@ -63,7 +65,9 @@ BACKENDS = {
     # land in the HF cache layout upstream's own hf_hub_download/from_pretrained calls expect
     # (./checkpoints and ./checkpoints/hf_cache, relative to the clone), so no path patch is needed.
     "seed-vc": {
-        "tool": "voice_convert", "size_gb": 2.5, "files": [],
+        "tool": "voice_convert", "files": [],
+        "size": "2.486 GB of weights, a 69.5 MB git clone, and 174.0 MB (Linux) or "
+                "143.5 MB (macOS) of Python packages beyond the shared runtime",
         # descript-audio-codec is what the vendored dac/ package needs; argbind and
         # descript-audiotools come with it.
         "deps": ["einops>=0.8,<1", "munch>=4,<5", "librosa>=0.11,<0.12", "transformers>=4.45,<5",
@@ -87,7 +91,9 @@ BACKENDS = {
     },
     # DiffSinger is MIT, but its opencpop checkpoint is not; see "notice".
     "diffsinger": {
-        "tool": "singing_synthesize", "size_gb": 0.5, "files": [],
+        "tool": "singing_synthesize", "files": [],
+        "size": "461.0 MB of weights, a 66.5 MB git clone, and 156.2 MB (Linux) or "
+                "114.6 MB (macOS) of Python packages beyond the shared runtime",
         # Trimmed to what the patched inference path actually imports: the patch keeps
         # DIFF_DECODERS out of usr.diffsinger_task, so the training stack never loads.
         "deps": ["pypinyin>=0.53,<1", "pycwt>=0.4.0b0,<0.5", "h5py>=3.12,<4", "pandas>=2.2,<3",
@@ -271,9 +277,10 @@ def _clone(spec: dict, destination: Path) -> None:
 def install(names: list[str]) -> None:
     global _seed_vc_notice_sent
     _seed_vc_notice_sent = False  # A later install that actually fetches must speak again.
-    total = sum(BACKENDS[name]["size_gb"] for name in names)
-    print(f"Installing {', '.join(names)}: about {total:.2f} GB of weights "
-          f"plus about 2.5 GB of torch runtime into {install_root()}")
+    detail = "; ".join(f"{name} is {BACKENDS[name]['size']}" for name in names)
+    print(f"Installing {', '.join(names)} into {install_root()}: {detail}. "
+          "Shared runtime is 3.946 GB on Linux x86_64 or 106.5 MB on macOS arm64. "
+          "CPython 3.11, if missing, is 30.8 MB on Linux x86_64 or 27.0 MB on macOS arm64.")
     for name in names:
         if BACKENDS[name].get("notice"):
             print(f"note:  {BACKENDS[name]['notice']}")

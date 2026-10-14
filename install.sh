@@ -267,10 +267,19 @@ while [ $# -gt 0 ]; do
     -h|--help)
       log "Usage: install.sh [update] [--force] [--with-models[=LIST]]"
       log "  --with-models[=LIST]  also install the neural backends (default: asr,separation)"
-      log "                        about 2.7 GB: torch runtime plus pinned weights"
+      log "                        default asr,separation: 4.332 GB on Linux x86_64, 395.9 MB on macOS arm64"
+      log "                        (Python packages, 232.0 MB of weights, CPython 3.11 if it is missing)"
+      log "                        shared runtime inside that: 3.946 GB on Linux x86_64 (torch wheel 888.1 MB"
+      log "                        plus CUDA 12) or 106.5 MB on macOS arm64"
+      log "                        CPython 3.11, if missing, is 30.8 MB on Linux x86_64 or 27.0 MB on macOS arm64"
       log "                        LIST names: asr, separation, seed-vc, diffsinger"
-      log "                        seed-vc (GPL-3.0, ~2.5 GB) and diffsinger (non-commercial"
-      log "                        checkpoint, ~0.5 GB) are opt-in only"
+      log "                        asr is 147.9 MB of weights; separation is 84.1 MB of weights"
+      log "                        seed-vc (GPL-3.0) is opt-in: 2.486 GB of weights, a 69.5 MB git clone,"
+      log "                        and 174.0 MB (Linux) or 143.5 MB (macOS) of Python packages beyond"
+      log "                        the shared runtime"
+      log "                        diffsinger is opt-in: 461.0 MB of weights, a 66.5 MB git clone, and"
+      log "                        156.2 MB (Linux) or 114.6 MB (macOS) of Python packages beyond the"
+      log "                        shared runtime (non-commercial checkpoint, Mandarin only)"
       exit 0
       ;;
     *) die "Unknown argument: $1. Try: ./install.sh or ./install.sh update" ;;
@@ -293,7 +302,7 @@ if [ "${EDITTUDE_SKIP_SYNC:-}" != "1" ]; then
 fi
 
 if [ -n "$WITH_MODELS" ]; then
-  info "Installing neural backends (${WITH_MODELS}); this downloads a few GB"
+  info "Installing neural backends (${WITH_MODELS}); shared runtime is 3.946 GB on Linux x86_64 or 106.5 MB on macOS arm64"
   EDITTUDE_ROOT="$PREFIX" "$UV_BIN" run --project "$PREFIX" \
     edittude-media models install --models "$WITH_MODELS"
 fi
