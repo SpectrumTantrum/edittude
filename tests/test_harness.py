@@ -199,6 +199,7 @@ class HarnessTest(unittest.TestCase):
                 self.assertEqual(rendered.getnchannels(), 1)
             self.assertEqual(hashlib.sha256(source.read_bytes()).hexdigest(), original)
 
+    @patch.dict(os.environ, {"EDITTUDE_ROOT": ""})
     def test_empty_workspace_uses_bundled_skills_and_tools(self):
         with tempfile.TemporaryDirectory() as temporary:
             workspace = Path(temporary)
@@ -253,6 +254,7 @@ class HarnessTest(unittest.TestCase):
             self.assertEqual(state_dir(workspace), legacy.resolve())
             self.assertFalse((workspace / ".edittude").exists())
 
+    @patch.dict(os.environ, {"EDITTUDE_ROOT": ""})
     def test_banner_and_help_use_the_edittude_name(self):
         buf = io.StringIO()
         Console(file=buf, force_terminal=False, width=80).print(_banner(Path("/tmp/saturday"), 2, 1))
