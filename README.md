@@ -12,7 +12,7 @@ curl -LsSf https://raw.githubusercontent.com/SpectrumTantrum/edittude/main/insta
 
 That installs `uv` if needed, syncs the project, and puts `edittude` in `~/.local/bin`. From a checkout you can run `./install.sh` instead. Later, `edittude update` refreshes that same install. A checkout that already lives in `~/.local/share/edittude-v3` stays there. New installs clone to `~/.local/share/edittude`.
 
-This path does not download the neural models. Sizes below are decimal (1 MB = 1,000,000 bytes), taken from `uv.lock`, the wheels `uv` resolves, and the pinned weight files. A first install that still needs `uv` and CPython downloads 85.246 MB on Linux x86_64 (4.369 MB shallow clone, 16.739 MB `uv`, 35.083 MB CPython 3.13, 29.055 MB of locked wheels) and 66.147 MB on macOS arm64 (4.369 MB clone, 14.280 MB `uv`, 25.258 MB CPython 3.13, 22.240 MB of wheels). An install that already has `uv` and Python downloads only the clone and the wheels.
+This path does not download the neural models. A first install that still needs `uv` and CPython downloads about 85 MB on Linux x86_64 and about 66 MB on macOS arm64. An install that already has `uv` and Python downloads only the clone and the wheels. Measured Oct 14, 2026, on a fresh install; sizes may drift as dependencies update.
 
 ffmpeg and ffprobe must be on PATH. On a Mac: `brew install ffmpeg`.
 
@@ -74,23 +74,18 @@ edittude-media models install --check               # status only, no network
 
 `--with-models` and `edittude-media models install` install `asr` and `separation` only. `seed-vc` and `diffsinger` stay out of that list until you name them. Either way the installer creates a separate `.venv-models` (Python 3.11) beside the install and puts weights in `models/`. The agent's own virtualenv is untouched. Override locations with `EDITTUDE_MODELS_DIR`, `EDITTUDE_MODEL_PYTHON`, or the per-backend `EDITTUDE_*` variables.
 
-The shared runtime is PyPI `torch==2.8.0` and `torchaudio==2.8.0` (`torch>=2.6,<2.9`). On Linux x86_64 the torch wheel is 888.1 MB and it pulls the CUDA 12 libraries, so the shared packages are 3.946 GB before any weights. On macOS arm64 the same pins are 106.5 MB and do not include CUDA. CPython 3.11, downloaded only when it is missing, is 30.8 MB on Linux x86_64 and 27.0 MB on macOS arm64.
+The shared runtime is PyPI `torch==2.8.0` and `torchaudio==2.8.0` (`torch>=2.6,<2.9`). On Linux x86_64 it pulls the CUDA 12 libraries. On macOS arm64 it does not.
 
-Default opt-in (`asr` and `separation`), including that runtime, its extra Python packages, the weights, and CPython 3.11 when it is missing:
-
-| platform | Python packages | weights | CPython 3.11 if missing | total |
-| --- | ---: | ---: | ---: | ---: |
-| Linux x86_64 | 4.069 GB | 232.0 MB | 30.8 MB | 4.332 GB |
-| macOS arm64 | 136.9 MB | 232.0 MB | 27.0 MB | 395.9 MB |
-
-Weights are the same on every platform. The two explicit backends also clone upstream source.
+`--with-models` downloads about 4.3 GB on Linux x86_64 and about 400 MB on macOS arm64. That includes the runtime, the weights, and CPython 3.11 when it is missing. Weights are the same on every platform. The two explicit backends also clone upstream source.
 
 | backend | tool | download | when |
 | --- | --- | --- | --- |
-| `asr` | `speech_transcribe` | 147.9 MB of weights | default opt-in (`--with-models`) |
-| `separation` | `audio_separate` | 84.1 MB of weights | default opt-in (`--with-models`) |
-| `seed-vc` | `voice_convert` | 2.486 GB of weights, a 69.5 MB git clone, and 174.0 MB (Linux) or 143.5 MB (macOS) of Python packages beyond the shared runtime | only when named |
-| `diffsinger` | `singing_synthesize` | 461.0 MB of weights, a 66.5 MB git clone, and 156.2 MB (Linux) or 114.6 MB (macOS) of Python packages beyond the shared runtime | only when named; Mandarin only |
+| `asr` | `speech_transcribe` | about 150 MB of weights | default opt-in (`--with-models`) |
+| `separation` | `audio_separate` | about 85 MB of weights | default opt-in (`--with-models`) |
+| `seed-vc` | `voice_convert` | about 2.5 GB of weights | only when named |
+| `diffsinger` | `singing_synthesize` | about 460 MB of weights | only when named; Mandarin only |
+
+Measured Oct 14, 2026, on a fresh install; sizes may drift as dependencies update.
 
 `seed-vc` and `diffsinger` stay out of the default list because they are large and carry terms of their own:
 
@@ -99,7 +94,7 @@ Weights are the same on every platform. The two explicit backends also clone ups
 
 The singing feature (`singing_synthesize`) is for non-commercial use only.
 
-`voice_convert` also downloads `rmvpe.pt` (181.2 MB, included in the seed-vc weight total above). Its license file states research use only.
+`voice_convert` also downloads `rmvpe.pt`, included in the seed-vc weight total above. Its license file states research use only.
 
 Those two backends are fetched only when you name them, and they are never committed. Everything runs offline afterwards.
 
