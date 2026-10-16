@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 import math
+import re
 from pathlib import Path
 
 from edittude_v3.media.core import (
@@ -8,6 +10,7 @@ from edittude_v3.media.core import (
     LOOKS,
     MediaError,
     ffmpeg,
+    ffprobe,
     run,
     which,
 )
@@ -50,6 +53,61 @@ def scale_filter(
     # Segments restart at 0 for concat. A whole-file filter must not: its audio is copied as is.
     pts = ",setpts=PTS-STARTPTS" if reset_pts else ""
     return vf + f",setsar=1{pts},format=yuv420p"
+
+
+# colorspace=iall names. ffprobe uses a few aliases for the same primaries.
+_COLORSPACE_IALL = {
+    "bt470m": "bt470m",
+    "bt470bg": "bt470bg",
+    "bt601-6-525": "bt601-6-525",
+    "bt601-6-625": "bt601-6-625",
+    "bt709": "bt709",
+    "smpte170m": "smpte170m",
+    "smpte240m": "smpte240m",
+    "bt2020": "bt2020",
+    "bt2020nc": "bt2020",
+    "bt2020ncl": "bt2020",
+    "bt2020c": "bt2020",
+}
+_UNTAGGED = {"", "unknown", "unspecified", "none"}
+# Delivered loudness. AAC encoding lifts inter-sample peaks above the PCM
+# limiter: a -2.5 dBTP filter render of the day-out mix measured -0.7 dBTP
+# after AAC. The linear pass therefore aims 2.5 dB under the ceiling.
+LOUDNESS_I = -16.0
+LOUDNESS_TP = -1.5
+LOUDNESS_LRA = 11.0
+LOUDNESS_TP_HEADROOM = 2.5
+
+
+def _colorspace_name(value: object) -> str | None:
+    key = str(value or "").strip().lower()
+    if key in _UNTAGGED:
+        return None
+    return _COLORSPACE_IALL.get(key)
+
+
+def input_colorspace(clip: dict) -> tuple[str, str]:
+    """Input space for a real conversion. Untagged SD is smpte170m; untagged HD is bt709."""
+    named = (
+        _colorspace_name(clip.get("color_space"))
+        or _colorspace_name(clip.get("color_primaries"))
+        or _colorspace_name(clip.get("color_transfer"))
+    )
+    if named is None:
+        height = int(clip.get("height") or clip.get("display_height") or 0)
+        named = "smpte170m" if 0 < height <= 576 else "bt709"
+    pix = str(clip.get("pix_fmt") or "")
+    raw_range = str(clip.get("color_range") or "").strip().lower()
+    irange = "pc" if raw_range in {"pc", "jpeg", "full"} or pix.startswith("yuvj") else "tv"
+    return named, irange
+
+
+def bt709_colorspace(clip: dict) -> str:
+    """Convert into bt709, tv range, yuv420p. iall/all runs the matrix, primaries, and transfer."""
+    iall, irange = input_colorspace(clip)
+    return (
+        f"colorspace=iall={iall}:all=bt709:irange={irange}:range=tv:format=yuv420p"
+    )
 
 
 def assemble(edl: EditDecision, out: Path, work_dir: Path) -> Path:
@@ -103,6 +161,12 @@ def _encode_event(event: Event, dest: Path, width: int, height: int, fit: str = 
     duration = math.floor(frames / fps * 1e6) / 1e6
     clip = describe_clip(src)
     vf = scale_filter(width, height, fit=fit, zoom=event.zoom, cx=event.cx, cy=event.cy, fps=fps)
+    # Convert before the stream copy. Identical tags keep ffmpeg 7 from rebuilding
+    # finish's filter graph after the title card has already ended.
+    suffix = ",format=yuv420p"
+    if vf.endswith(suffix):
+        vf = vf[: -len(suffix)]
+    vf += "," + bt709_colorspace(clip)
     args = [
         "-ss",
         f"{event.in_point:.3f}",
@@ -135,6 +199,16 @@ def _encode_event(event: Event, dest: Path, width: int, height: int, fit: str = 
         "18",
         "-pix_fmt",
         "yuv420p",
+        "-colorspace",
+        "bt709",
+        "-color_primaries",
+        "bt709",
+        "-color_trc",
+        "bt709",
+        "-color_range",
+        "tv",
+        "-x264-params",
+        "colorprim=bt709:transfer=bt709:colormatrix=bt709",
     ]
     if clip.get("has_audio"):
         args += [
@@ -358,7 +432,11 @@ def finish(
     mus = Path(music) if music else (Path(edl.music) if edl.music else None)
     inputs = ["-i", str(picture)]
     next_index = 1
-    filters = [f"[0:v]{look}[base]"]
+    # Grade stays in bt709. The segment encode already converted; this keeps the
+    # finished file tagged the same way so a later concat does not see a new space.
+    filters = [
+        f"[0:v]{look},colorspace=iall=bt709:all=bt709:irange=tv:range=tv:format=yuv420p[base]"
+    ]
     video_out = "[base]"
     if edl.title.strip():
         card = out.parent / "title-card.png"
@@ -381,38 +459,46 @@ def finish(
         video_out = "[base]"
 
     mix_labels: list[str] = []
+    audio_filters: list[str] = []
     picture_meta = describe_clip(picture)
     if picture_meta.get("has_audio"):
-        filters.append("[0:a]volume=0.16[amb]")
+        audio_filters.append("[0:a]volume=0.16[amb]")
         mix_labels.append("[amb]")
     if vo and vo.is_file():
         inputs += ["-i", str(vo)]
-        filters.append(
-            f"[{next_index}:a]loudnorm=I=-16:TP=-1.5:LRA=11,"
+        audio_filters.append(
+            f"[{next_index}:a]loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g},"
             "aformat=sample_rates=48000:channel_layouts=stereo[vo]"
         )
         mix_labels.append("[vo]")
         next_index += 1
     if mus and mus.is_file():
         inputs += ["-i", str(mus)]
-        filters.append(f"[{next_index}:a]volume=0.08,aformat=channel_layouts=stereo[mus]")
+        audio_filters.append(f"[{next_index}:a]volume=0.08,aformat=channel_layouts=stereo[mus]")
         mix_labels.append("[mus]")
     if mix_labels:
         if len(mix_labels) == 1:
-            filters.append(
-                f"{mix_labels[0]}loudnorm=I=-16:TP=-1.5:LRA=11,"
-                "aformat=sample_rates=48000:channel_layouts=stereo[a]"
-            )
+            pre_filters = audio_filters
+            pre_label = mix_labels[0]
         else:
-            filters.append(
+            pre_filters = [
+                *audio_filters,
                 f"{''.join(mix_labels)}amix=inputs={len(mix_labels)}:duration=first:"
-                "dropout_transition=0.4,loudnorm=I=-16:TP=-1.5:LRA=11,"
-                "aformat=sample_rates=48000:channel_layouts=stereo[a]"
-            )
+                "dropout_transition=0.4[pre]",
+            ]
+            pre_label = "[pre]"
+        loud = _limiting_loudnorm(_audio_inputs(picture, vo, mus), _measure_filters(
+            picture_meta.get("has_audio"), vo, mus,
+        ))
+        filters.extend([
+            *pre_filters,
+            f"{pre_label}{loud},aformat=sample_rates=48000:channel_layouts=stereo[a]",
+        ])
         map_audio = ["-map", "[a]"]
     else:
         map_audio = []
     out.parent.mkdir(parents=True, exist_ok=True)
+    frames = _video_frame_count(picture, int(edl.fps or 30))
     ffmpeg(
         [
             *inputs,
@@ -421,6 +507,8 @@ def finish(
             "-map",
             video_out,
             *map_audio,
+            "-frames:v",
+            str(frames),
             "-c:v",
             "libx264",
             "-preset",
@@ -429,19 +517,127 @@ def finish(
             "18",
             "-pix_fmt",
             "yuv420p",
+            "-colorspace",
+            "bt709",
+            "-color_primaries",
+            "bt709",
+            "-color_trc",
+            "bt709",
+            "-color_range",
+            "tv",
+            "-x264-params",
+            "colorprim=bt709:transfer=bt709:colormatrix=bt709",
             "-c:a",
             "aac",
             "-ar",
             "48000",
             "-b:a",
             "192k",
-            "-shortest",
             "-movflags",
             "+faststart",
             str(out),
         ]
     )
     return out
+
+
+def _audio_inputs(picture: Path, vo: Path | None, mus: Path | None) -> list[str]:
+    inputs = ["-i", str(picture)]
+    if vo and vo.is_file():
+        inputs += ["-i", str(vo)]
+    if mus and mus.is_file():
+        inputs += ["-i", str(mus)]
+    return inputs
+
+
+def _measure_filters(has_picture_audio: bool, vo: Path | None, mus: Path | None) -> tuple[list[str], str]:
+    """Same program the encode loudnorm sees, with audio inputs packed from index 0."""
+    filters: list[str] = []
+    labels: list[str] = []
+    index = 1
+    if has_picture_audio:
+        filters.append("[0:a]volume=0.16[amb]")
+        labels.append("[amb]")
+    if vo and vo.is_file():
+        filters.append(
+            f"[{index}:a]loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g},"
+            "aformat=sample_rates=48000:channel_layouts=stereo[vo]"
+        )
+        labels.append("[vo]")
+        index += 1
+    if mus and mus.is_file():
+        filters.append(f"[{index}:a]volume=0.08,aformat=channel_layouts=stereo[mus]")
+        labels.append("[mus]")
+    if len(labels) == 1:
+        return filters, labels[0]
+    return [
+        *filters,
+        f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:dropout_transition=0.4[pre]",
+    ], "[pre]"
+
+
+def _limiting_loudnorm(inputs: list[str], measured: tuple[list[str], str]) -> str:
+    """Two-pass linear loudnorm. The filter true-peak sits under the delivered ceiling."""
+    pre_filters, pre_label = measured
+    measure = (
+        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:print_format=json"
+    )
+    result = ffmpeg(
+        [
+            *inputs,
+            "-filter_complex",
+            ";".join([*pre_filters, f"{pre_label}{measure}[a]"]),
+            "-map",
+            "[a]",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture=True,
+    )
+    stats = _loudnorm_stats(result.stderr or "")
+    if stats is None:
+        # Digital silence has no finite loudness. Leave it alone; QC still flags it.
+        return "volume=1"
+    tp = LOUDNESS_TP - LOUDNESS_TP_HEADROOM
+    return (
+        f"loudnorm=I={LOUDNESS_I:g}:TP={tp:g}:LRA={LOUDNESS_LRA:g}:linear=true:"
+        f"measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
+        f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
+        f"offset={stats['target_offset']}"
+    )
+
+
+def _loudnorm_stats(stderr: str) -> dict[str, str] | None:
+    matches = re.findall(r'\{\s*"input_i".*?\}', stderr, re.S)
+    if not matches:
+        return None
+    try:
+        data = json.loads(matches[-1])
+        values = {key: float(data[key]) for key in (
+            "input_i", "input_tp", "input_lra", "input_thresh", "target_offset",
+        )}
+    except (KeyError, TypeError, ValueError, json.JSONDecodeError):
+        return None
+    if not all(math.isfinite(value) for value in values.values()):
+        return None
+    return {key: f"{value:.2f}" for key, value in values.items()}
+
+
+def _video_frame_count(path: Path, fps: int) -> int:
+    probe = ffprobe(path)
+    stream = next(
+        (item for item in probe.get("streams") or [] if item.get("codec_type") == "video"),
+        {},
+    )
+    try:
+        count = int(stream.get("nb_frames") or 0)
+    except (TypeError, ValueError):
+        count = 0
+    if count > 0:
+        return count
+    duration = float((probe.get("format") or {}).get("duration") or stream.get("duration") or 0)
+    return max(1, round(duration * max(fps, 1)))
 
 
 def grab_frames(video: Path, out_dir: Path, fractions: tuple[float, ...] = (0.05, 0.25, 0.5, 0.75, 0.95)) -> list[Path]:
