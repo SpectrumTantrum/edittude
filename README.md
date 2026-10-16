@@ -68,12 +68,12 @@ From a checkout, install, fetch the sample pack, and render a proof. This path d
 ```bash
 ./install.sh
 tools/fetch_sample.sh
-edittude media proof samples/day-out --out out/
+edittude media proof samples/day-out --out <dir>
 ```
 
 The sample filenames, in the order `first_cut` sorts them, are `bbb-extract.ogv`, `butterflies.webm`, `the-domain-sydney.webm`, and `bbb-trailer-iphone.m4v`.
 
-The finished cut is `out/final.mp4`. `out/qc.json` reviews that cut under the current QC checks. Other footage gets the same checks and passes only when it clears them. Per-clip license, attribution, and source page: `samples/LICENSES.md`.
+The finished cut is `<dir>/final.mp4`. `<dir>/qc.json` reviews that cut under the current QC checks. Other footage gets the same checks and passes only when it clears them. Per-clip license, attribution, and source page: `samples/LICENSES.md`.
 
 ## Neural models (opt-in)
 
