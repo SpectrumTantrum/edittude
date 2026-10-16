@@ -1,7 +1,7 @@
 {
   "pack": "samples/day-out",
   "measured": "2026-10-16",
-  "total_bytes": 185364995,
+  "total_bytes": 102117948,
   "audio_substitution": null,
   "probed_with": {
     "ffmpeg": "6.1.1-3ubuntu5",
@@ -9,11 +9,11 @@
   },
   "notes": [
     "Sizes and sha256 are the HTTP body of url. fps is ffprobe avg_frame_rate of the video stream. Nothing was re-encoded.",
-    "Replaces the Sintel trailer and the Elephants Dream teaser. Drops the silent lunar render. Keeps the Big Buck Bunny trailer and The Domain (30000/1001).",
-    "No native 30/1 clip with an audio track fit under the 200000000 byte cap. download.blender.org bbb_sunflower_1080p_30fps_normal.mp4.zip is 275524128 bytes. The Domain stays the 29.97 clip.",
-    "Kept windows are from first_cut on this four-clip set. Sort is container creation_time, then filename. bbb-extract.ogv has no creation_time and sorts first, so it grows. daily-dweebs.webm then grows only to 8.820s, before its end card. Renaming the files changes who grows.",
-    "Window check used silencedetect=n=-38dB:d=1.2, blackdetect=d=0.2:pix_th=0.10, freezedetect=n=-55dB:d=1.4 on an accurate trim of each kept source span. No threshold was changed. The same trim after the warm grade, and the four windows joined in cut order, also printed no detector lines.",
-    "Inventory treats .ogv as video so the Big Buck Bunny extract is a clip. Blender Studio's remixing page says studio content is generally CC-BY. The Daily Dweebs file on Commons is CC-BY-4.0."
+    "Swaps: daily-dweebs.webm (7680x4320, 147627996 bytes) is replaced by butterflies.webm (1920x1080, 71552075 bytes). bbb-trailer-480p.mov (853x480, 11061011 bytes) is replaced by bbb-trailer-iphone.m4v (480x270, 3889885 bytes).",
+    "Every clip is 1080p or lower. Total is 102117948 bytes, around 100 MB. The hard cap stays 200000000 bytes.",
+    "Kept windows are from first_cut on this four-clip set. Sort is container creation_time, then filename. The filenames in that order are bbb-extract.ogv, butterflies.webm, the-domain-sydney.webm, bbb-trailer-iphone.m4v. bbb-extract.ogv has no creation_time and grows. butterflies.webm then grows only to 8.820s, before its end card.",
+    "Window check used silencedetect=n=-38dB:d=1.2, blackdetect=d=0.2:pix_th=0.10, freezedetect=n=-55dB:d=1.4 on an accurate trim of each kept source span, then the same trim after the warm grade, then the four windows joined in cut order. No threshold was changed. None of those passes printed a detector line.",
+    "The Domain stays 30000/1001. This pack has no native 30/1 clip. bbb-extract.ogv stays the Commons original, not a transcode."
   ],
   "clips": [
     {
@@ -31,41 +31,24 @@
       "audio_codec": "vorbis",
       "width": 854,
       "height": 480,
-      "qc": "first_cut window source 0.120-43.420 (hold 43.300s). Trimmed blackdetect d=0.2:pix_th=0.10, freezedetect n=-55dB:d=1.4, silencedetect n=-38dB:d=1.2: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Whole file: none. avg_frame_rate 24/1. Native 24 fps Theora/Vorbis, not a 24-to-30 conform."
+      "qc": "first_cut window source 0.120-43.420 (hold 43.300s). Trimmed blackdetect d=0.2:pix_th=0.10, freezedetect n=-55dB:d=1.4, silencedetect n=-38dB:d=1.2: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Joined with the other three windows: no silence_start. Whole file: none. avg_frame_rate 24/1. 854x480."
     },
     {
-      "file": "samples/day-out/daily-dweebs.webm",
-      "url": "https://upload.wikimedia.org/wikipedia/commons/b/b2/The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm",
-      "sha256": "c68845fe300818a36a277afe6043820ccfc5b2306522e17773b8be2a1e8575d3",
-      "size": 147627996,
-      "license": "CC-BY-4.0",
-      "attribution": "Uploader D-Kuru on Wikimedia Commons. Blender Foundation, The Daily Dweebs. File page: https://commons.wikimedia.org/wiki/File:The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm. Project: https://studio.blender.org/projects/dailydweebs/. Studio license note: https://studio.blender.org/remixing/",
-      "source_page": "https://commons.wikimedia.org/wiki/File:The_Daily_Dweebs_-_Blender_Open_Movie-full_movie.webm",
+      "file": "samples/day-out/butterflies.webm",
+      "url": "https://upload.wikimedia.org/wikipedia/commons/5/58/Abby_Boyce_-_Butterflies_%282018%29.webm",
+      "sha256": "095133d05fb8db64cb1a4e6e554268d1105f3d1170ff2504075d8f96ee858f90",
+      "size": 71552075,
+      "license": "CC-BY-3.0",
+      "attribution": "Uploader The Harvett Vault on Wikimedia Commons. Abby Boyce, Butterflies (2018). File page: https://commons.wikimedia.org/wiki/File:Abby_Boyce_-_Butterflies_(2018).webm",
+      "source_page": "https://commons.wikimedia.org/wiki/File:Abby_Boyce_-_Butterflies_(2018).webm",
       "fps": "24/1",
-      "duration": 60.041,
+      "duration": 134.344,
       "has_audio": true,
       "video_codec": "vp9",
       "audio_codec": "opus",
-      "width": 7680,
-      "height": 4320,
-      "qc": "first_cut window source 0.120-8.820 (hold 8.700s). Trimmed detectors: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Whole file is not clean: freeze 52.09-54.09, 54.09-56.09, 56.09-58.09, and 58.09 onward; black 58.09-59.965; silence 58.453-60.031. Those sit after the kept window. avg_frame_rate 24/1, vp9 7680x4320, opus stereo."
-    },
-    {
-      "file": "samples/day-out/bbb-trailer-480p.mov",
-      "url": "https://download.blender.org/peach/trailer/trailer_480p.mov",
-      "sha256": "36801b74638c12be9aa587e93cd18edfc9bc51a1c089ab2a19ee42beed9f497d",
-      "size": 11061011,
-      "license": "CC-BY-3.0",
-      "attribution": "(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org",
-      "source_page": "https://peach.blender.org/about/",
-      "fps": "25/1",
-      "duration": 32.995,
-      "has_audio": true,
-      "video_codec": "h264",
-      "audio_codec": "aac",
-      "width": 853,
-      "height": 480,
-      "qc": "first_cut window on this pack is source 0.120-4.120 (hold 4.000s; creation_time 2008-03-18 sorts it last). Trimmed detectors: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Whole file: no black, silence, or freeze. Integrated loudness -14.8 LUFS. avg_frame_rate 25/1. Published trailer rate, not a 24-to-30 conform."
+      "width": 1920,
+      "height": 1080,
+      "qc": "first_cut window source 0.120-8.820 (hold 8.700s). Trimmed detectors: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Joined with the other three windows: no silence_start. Whole file is not clean: freezes 120.681-122.764, 122.764-124.431, 124.431-126.889, 126.889-129.431, and freeze_start 131.806; black 120.681-124.431 and 131.806-134.306. Those sit after the kept window. No silence lines on the whole file. avg_frame_rate 24/1, vp9 1920x1080, opus stereo."
     },
     {
       "file": "samples/day-out/the-domain-sydney.webm",
@@ -82,7 +65,24 @@
       "audio_codec": "opus",
       "width": 1920,
       "height": 1080,
-      "qc": "first_cut window on this pack is source 0.120-4.120 (hold 4.000s). Trimmed detectors: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Whole file: no black, silence, or freeze. Integrated loudness -29.7 LUFS. avg_frame_rate 30000/1001 (29.97), not 30/1. The file title says 30 fps. This pack has no native 30/1 clip."
+      "qc": "first_cut window on this pack is source 0.120-4.120 (hold 4.000s). Trimmed detectors: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Joined with the other three windows: no silence_start. Whole file: no black, silence, or freeze. Integrated loudness -29.7 LUFS. avg_frame_rate 30000/1001 (29.97). 1920x1080."
+    },
+    {
+      "file": "samples/day-out/bbb-trailer-iphone.m4v",
+      "url": "https://download.blender.org/peach/trailer/trailer_iphone.m4v",
+      "sha256": "2e09da35a9093921001a6f0a01fc544ba20a84588c4f9bc9a52b506888478280",
+      "size": 3889885,
+      "license": "CC-BY-3.0",
+      "attribution": "(c) copyright 2008, Blender Foundation / www.bigbuckbunny.org",
+      "source_page": "https://peach.blender.org/about/",
+      "fps": "25/1",
+      "duration": 33.023333,
+      "has_audio": true,
+      "video_codec": "h264",
+      "audio_codec": "aac",
+      "width": 480,
+      "height": 270,
+      "qc": "first_cut window on this pack is source 0.120-4.120 (hold 4.000s; creation_time 2008-03-18T09:48:34Z sorts it last). Trimmed detectors: no black_start, freeze_start, or silence_start. Warm-grade pass of that trim: none. Joined with the other three windows: no silence_start. Whole file has silence 31.767-33.042 and no black or freeze. That silence is after the kept window. avg_frame_rate 25/1. 480x270. Official peach trailer, not a re-encode of the 480p file."
     }
   ]
 }
