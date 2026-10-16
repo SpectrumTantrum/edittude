@@ -14,7 +14,7 @@ from edittude_v3.media.edl import (
     pick_music,
     pick_voiceover,
 )
-from edittude_v3.media.inventory import extract_thumbs, iter_media
+from edittude_v3.media.inventory import build_inventory, extract_thumbs, iter_media
 from edittude_v3.media.render import assemble
 from edittude_v3.paths import state_dir
 from tools.media import media_render
@@ -28,6 +28,30 @@ class CutInputFixesTest(unittest.TestCase):
     def require_ffmpeg(self):
         if not (shutil.which("ffmpeg") and shutil.which("ffprobe")):
             self.skipTest("FFmpeg/ffprobe unavailable")
+
+    def test_ogv_counts_as_video_in_the_inventory(self):
+        self.require_ffmpeg()
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            clip = root / "clip.ogv"
+            bed = root / "bed.ogg"
+            ffmpeg([
+                "-f", "lavfi", "-i", "testsrc=size=160x90:rate=24:duration=0.6",
+                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=0.6",
+                "-c:v", "libtheora", "-c:a", "libvorbis", "-shortest", str(clip),
+            ])
+            ffmpeg([
+                "-f", "lavfi", "-i", "sine=frequency=330:sample_rate=48000:duration=0.6",
+                "-c:a", "libvorbis", str(bed),
+            ])
+            inventory = build_inventory(root)
+            kinds = {item["name"]: item for item in inventory["clips"]}
+            self.assertEqual(set(kinds), {"clip.ogv", "bed.ogg"})
+            self.assertEqual(kinds["clip.ogv"]["kind"], "video")
+            self.assertTrue(kinds["clip.ogv"]["has_video"])
+            self.assertTrue(kinds["clip.ogv"]["has_audio"])
+            self.assertEqual(kinds["bed.ogg"]["kind"], "audio")
+            self.assertFalse(kinds["bed.ogg"]["has_video"])
 
     def test_inventory_skips_the_harness_state_dir(self):
         with tempfile.TemporaryDirectory() as temporary:
