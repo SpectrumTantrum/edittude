@@ -7,7 +7,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".mkv", ".avi", ".webm"}
+VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".mkv", ".avi", ".webm", ".ogv"}
 AUDIO_EXTS = {".m4a", ".aac", ".wav", ".mp3", ".aiff", ".aif", ".flac", ".ogg"}
 SKIP_DIRS = {
     ".edittude",
