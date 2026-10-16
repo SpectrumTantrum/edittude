@@ -16,3 +16,4 @@ __pycache__/
 *.mov
 *.MOV
 *.m4a
+/samples/day-out/

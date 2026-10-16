@@ -61,6 +61,18 @@ None of these overwrite an existing output. Rerunning one onto the same file nee
 
 Write large renders next to the footage, not into this repo.
 
+## Try it offline
+
+From a checkout, install, fetch the sample pack, and render a proof. This path does not download neural models and does not need an API key.
+
+```bash
+./install.sh
+tools/fetch_sample.sh
+edittude media proof samples/day-out --out out/
+```
+
+The finished cut is `out/final.mp4`. The QC report is `out/qc.json`. Per-clip license, attribution, and source page: `samples/LICENSES.md`.
+
 ## Neural models (opt-in)
 
 Transcription, stem separation, voice conversion and singing synthesis need extra runtimes and weights. Nothing is downloaded unless you ask:
