@@ -70,13 +70,14 @@ _COLORSPACE_IALL = {
     "bt2020c": "bt2020",
 }
 _UNTAGGED = {"", "unknown", "unspecified", "none"}
-# Delivered loudness. AAC encoding lifts inter-sample peaks above the PCM
-# limiter: a -2.5 dBTP filter render of the day-out mix measured -0.7 dBTP
-# after AAC. The linear pass therefore aims 2.5 dB under the ceiling.
+# Untagged frames below this height are SD (smpte170m). 720 and above are HD (bt709).
+_SD_HEIGHT = 720
+# Delivered loudness. alimiter is a sample-peak limiter; encoded true peak reads
+# hotter than that threshold, so the limit sits 0.5 dB under the -1.5 dBTP ceiling.
 LOUDNESS_I = -16.0
 LOUDNESS_TP = -1.5
 LOUDNESS_LRA = 11.0
-LOUDNESS_TP_HEADROOM = 2.5
+LOUDNESS_SAMPLE_MARGIN = 0.5
 
 
 def _colorspace_name(value: object) -> str | None:
@@ -86,20 +87,38 @@ def _colorspace_name(value: object) -> str | None:
     return _COLORSPACE_IALL.get(key)
 
 
-def input_colorspace(clip: dict) -> tuple[str, str]:
-    """Input space for a real conversion. Untagged SD is smpte170m; untagged HD is bt709."""
-    named = (
-        _colorspace_name(clip.get("color_space"))
-        or _colorspace_name(clip.get("color_primaries"))
-        or _colorspace_name(clip.get("color_transfer"))
-    )
-    if named is None:
-        height = int(clip.get("height") or clip.get("display_height") or 0)
-        named = "smpte170m" if 0 < height <= 576 else "bt709"
+def _full_range(clip: dict) -> bool:
     pix = str(clip.get("pix_fmt") or "")
     raw_range = str(clip.get("color_range") or "").strip().lower()
-    irange = "pc" if raw_range in {"pc", "jpeg", "full"} or pix.startswith("yuvj") else "tv"
+    return raw_range in {"pc", "jpeg", "full"} or pix.startswith("yuvj")
+
+
+def input_colorspace(clip: dict) -> tuple[str, str]:
+    """Input space for a real conversion. Untagged SD is smpte170m; untagged HD is bt709."""
+    named = None
+    for key in ("color_space", "color_primaries", "color_transfer"):
+        tag = _colorspace_name(clip.get(key))
+        if tag is None:
+            continue
+        if tag != "bt709":
+            named = tag
+            break
+        if named is None:
+            named = tag
+    if named is None:
+        height = int(clip.get("height") or clip.get("display_height") or 0)
+        named = "smpte170m" if 0 < height < _SD_HEIGHT else "bt709"
+    irange = "pc" if _full_range(clip) else "tv"
     return named, irange
+
+
+def relabel_only(clip: dict) -> bool:
+    """Already bt709 and tv range: the encoder writes the labels, pixels stay put."""
+    tags = [
+        _colorspace_name(clip.get(key))
+        for key in ("color_space", "color_primaries", "color_transfer")
+    ]
+    return all(tag == "bt709" for tag in tags) and not _full_range(clip)
 
 
 def bt709_colorspace(clip: dict) -> str:
@@ -108,6 +127,13 @@ def bt709_colorspace(clip: dict) -> str:
     return (
         f"colorspace=iall={iall}:all=bt709:irange={irange}:range=tv:format=yuv420p"
     )
+
+
+def color_convert_filter(clip: dict) -> str | None:
+    """colorspace conversion for a re-encode. None when the clip is already bt709."""
+    if relabel_only(clip):
+        return None
+    return bt709_colorspace(clip)
 
 
 def assemble(edl: EditDecision, out: Path, work_dir: Path) -> Path:
@@ -162,11 +188,14 @@ def _encode_event(event: Event, dest: Path, width: int, height: int, fit: str = 
     clip = describe_clip(src)
     vf = scale_filter(width, height, fit=fit, zoom=event.zoom, cx=event.cx, cy=event.cy, fps=fps)
     # Convert before the stream copy. Identical tags keep ffmpeg 7 from rebuilding
-    # finish's filter graph after the title card has already ended.
-    suffix = ",format=yuv420p"
-    if vf.endswith(suffix):
-        vf = vf[: -len(suffix)]
-    vf += "," + bt709_colorspace(clip)
+    # finish's filter graph after the title card has already ended. A clip that is
+    # already bt709 is only relabeled by the encoder flags below.
+    convert = color_convert_filter(clip)
+    if convert:
+        suffix = ",format=yuv420p"
+        if vf.endswith(suffix):
+            vf = vf[: -len(suffix)]
+        vf += "," + convert
     args = [
         "-ss",
         f"{event.in_point:.3f}",
@@ -432,11 +461,12 @@ def finish(
     mus = Path(music) if music else (Path(edl.music) if edl.music else None)
     inputs = ["-i", str(picture)]
     next_index = 1
-    # Grade stays in bt709. The segment encode already converted; this keeps the
-    # finished file tagged the same way so a later concat does not see a new space.
-    filters = [
-        f"[0:v]{look},colorspace=iall=bt709:all=bt709:irange=tv:range=tv:format=yuv420p[base]"
-    ]
+    picture_meta = describe_clip(picture)
+    # Grade stays in the picture's space. Convert only when that space is not
+    # already bt709; otherwise the encoder flags relabel the finished file.
+    convert = color_convert_filter(picture_meta)
+    chain = f"{look},{convert}" if convert else look
+    filters = [f"[0:v]{chain}[base]"]
     video_out = "[base]"
     if edl.title.strip():
         card = out.parent / "title-card.png"
@@ -460,7 +490,6 @@ def finish(
 
     mix_labels: list[str] = []
     audio_filters: list[str] = []
-    picture_meta = describe_clip(picture)
     if picture_meta.get("has_audio"):
         audio_filters.append("[0:a]volume=0.16[amb]")
         mix_labels.append("[amb]")
@@ -576,8 +605,15 @@ def _measure_filters(has_picture_audio: bool, vo: Path | None, mus: Path | None)
     ], "[pre]"
 
 
+def _alimiter() -> str:
+    """Sample-peak ceiling just under the delivered true-peak target."""
+    decibels = LOUDNESS_TP - LOUDNESS_SAMPLE_MARGIN
+    limit = 10 ** (decibels / 20)
+    return f"alimiter=limit={limit:.6f}:level=false"
+
+
 def _limiting_loudnorm(inputs: list[str], measured: tuple[list[str], str]) -> str:
-    """Two-pass linear loudnorm. The filter true-peak sits under the delivered ceiling."""
+    """Two-pass loudnorm, then a sample-peak limiter so dynamic mode still holds the ceiling."""
     pre_filters, pre_label = measured
     measure = (
         f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:print_format=json"
@@ -599,12 +635,11 @@ def _limiting_loudnorm(inputs: list[str], measured: tuple[list[str], str]) -> st
     if stats is None:
         # Digital silence has no finite loudness. Leave it alone; QC still flags it.
         return "volume=1"
-    tp = LOUDNESS_TP - LOUDNESS_TP_HEADROOM
     return (
-        f"loudnorm=I={LOUDNESS_I:g}:TP={tp:g}:LRA={LOUDNESS_LRA:g}:linear=true:"
+        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:linear=true:"
         f"measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
         f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
-        f"offset={stats['target_offset']}"
+        f"offset={stats['target_offset']}:print_format=json,{_alimiter()}"
     )
 
 
