@@ -1,7 +1,10 @@
 """Messy-head windows, the silent-clip bed, and the E1a clean-cut regression."""
 from __future__ import annotations
 
+import contextlib
 import inspect
+import io
+import math
 import re
 import shutil
 import tempfile
@@ -20,8 +23,18 @@ from edittude_v3.media.edl import (
 )
 from edittude_v3.media.inventory import build_inventory, describe_clip
 from edittude_v3.media.proof import run_proof
-from edittude_v3.media.qc import BLACK_DETECT, FREEZE_DETECT, SILENCE_DETECT, review
-from edittude_v3.media.render import AUDIO_BED, assemble, finish
+from edittude_v3.media.qc import BLACK_DETECT, FREEZE_DETECT, SILENCE_DETECT, _parse_loudness, review
+from edittude_v3.media.render import (
+    AUDIO_BED,
+    BED_CLEARANCE,
+    BED_LUFS,
+    BED_MAX,
+    BED_MIN,
+    _AMB_LINEAR,
+    _bed_target,
+    assemble,
+    finish,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 NOTES = (
@@ -32,6 +45,18 @@ NOTES = (
 
 def _ffmpeg(*args: str) -> None:
     ffmpeg(["-v", "error", *args])
+
+
+def _span_lufs(path: Path, start: float, end: float) -> float:
+    result = ffmpeg([
+        "-i", str(path),
+        "-af", f"atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS,ebur128=peak=true",
+        "-f", "null", "-",
+    ], capture=True)
+    stats = _parse_loudness((result.stderr or "") + (result.stdout or ""))
+    if stats["I"] is None:
+        raise AssertionError((result.stderr or "")[-500:])
+    return float(stats["I"])
 
 
 def _rate(path: Path) -> Fraction:
@@ -254,7 +279,10 @@ class HeadSkipPlanTest(unittest.TestCase):
                 "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-shortest", str(path),
             )
-            cut, _clip = self._cut(path)
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                cut, _clip = self._cut(path)
+            self.assertIn(f"{SKIPPED_NO_CLEAN}: all-black.mp4", buf.getvalue())
             self.assertEqual(cut.events, [])
             self.assertEqual(cut.skipped, [{"src": str(path.resolve()), "reason": SKIPPED_NO_CLEAN}])
             self.assertEqual(SKIPPED_NO_CLEAN, "skipped: no clean window")
@@ -318,6 +346,86 @@ class HeadSkipPlanTest(unittest.TestCase):
             self.assertEqual(report["issues"], [])
             self.assertIsNotNone(report["loudness"]["I"])
             self.assertLessEqual(abs(report["loudness"]["I"] + 16), 0.5)
+            probed = ffprobe(final)
+            durations = {
+                stream["codec_type"]: float(stream.get("duration") or 0)
+                for stream in probed["streams"]
+            }
+            self.assertLessEqual(abs(durations["audio"] - durations["video"]), 0.05)
+
+    def test_warm_grade_black_is_skipped(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "graded-dark.mp4"
+            _ffmpeg(
+                "-f", "lavfi", "-i",
+                "color=c=black:s=160x90:r=24:d=3,format=yuv420p,geq=lum=40:cb=128:cr=128",
+                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=3",
+                "-c:v", "libx264", "-qp", "0", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-shortest", str(path),
+            )
+            raw = ffmpeg(["-i", str(path), "-vf", BLACK_DETECT, "-f", "null", "-"], capture=True)
+            self.assertNotIn("black_start", (raw.stderr or "") + (raw.stdout or ""))
+            buf = io.StringIO()
+            with contextlib.redirect_stdout(buf):
+                cut, _clip = self._cut(path)
+            self.assertEqual(cut.events, [])
+            self.assertEqual(cut.skipped, [{"src": str(path.resolve()), "reason": SKIPPED_NO_CLEAN}])
+            self.assertIn(f"{SKIPPED_NO_CLEAN}: graded-dark.mp4", buf.getvalue())
+
+    def test_bed_target_clears_a_quiet_neighbour(self) -> None:
+        amb = 20.0 * math.log10(_AMB_LINEAR)
+        gain = 21.34
+        quietest = -30.5
+        target = _bed_target(quietest, gain)
+        predicted = quietest + amb + gain
+        self.assertAlmostEqual(target, min(BED_LUFS, predicted - BED_CLEARANCE), places=2)
+        self.assertAlmostEqual(predicted - target, BED_CLEARANCE, places=6)
+        self.assertGreaterEqual(target, BED_MIN)
+        self.assertLessEqual(target, BED_MAX)
+        self.assertAlmostEqual(_bed_target(-5.0, 0.0), BED_LUFS, places=2)
+        self.assertEqual(_bed_target(-80.0, 0.0), BED_MIN)
+
+    def test_bed_under_a_neighbour_lands_between_minus_40_and_minus_30(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            bed = root / "a-bed.mp4"
+            tone = root / "b-tone.mp4"
+            _ffmpeg(
+                "-f", "lavfi", "-i", "testsrc=s=160x90:r=30:d=4",
+                "-an", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                str(bed),
+            )
+            _ffmpeg(
+                "-f", "lavfi", "-i", "testsrc=s=160x90:r=30:d=4",
+                "-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000:duration=4",
+                "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-shortest", str(tone),
+            )
+            cut = first_cut(build_inventory(root), title="")
+            self.assertEqual([event.audio for event in cut.events], ["bed", ""])
+            picture = root / "picture.mp4"
+            assemble(cut, picture, root / "work")
+            final = finish(picture, root / "final.mp4", edl=cut)
+            fps = int(cut.fps or 30)
+            bed_frames = max(1, round(cut.events[0].duration() * fps))
+            bed_end = bed_frames / fps
+            neighbour_frames = max(1, round(cut.events[1].duration() * fps))
+            neighbour_end = bed_end + neighbour_frames / fps
+            bed_i = _span_lufs(final, 0.05, bed_end - 0.05)
+            neighbour_i = _span_lufs(final, bed_end + 0.05, neighbour_end - 0.05)
+            self.assertGreaterEqual(bed_i, -40.0, bed_i)
+            self.assertLessEqual(bed_i, -30.0, bed_i)
+            self.assertGreaterEqual(neighbour_i - bed_i, 10.0, (neighbour_i, bed_i))
+            silence = ffmpeg([
+                "-i", str(final),
+                "-af", f"atrim=start=0:end={bed_end:.6f},silencedetect=n=-60dB:d=0.3",
+                "-f", "null", "-",
+            ], capture=True)
+            self.assertNotIn("silence_start", (silence.stderr or "") + (silence.stdout or ""))
+            report = review(final)
+            self.assertIsNotNone(report["loudness"]["TP"])
+            self.assertLessEqual(report["loudness"]["TP"], -1.5)
+            self.assertLessEqual(abs(report["loudness"]["I"] + 16), 1.5, report["loudness"])
 
     def test_clean_clip_matches_the_e1a_window(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
@@ -465,6 +573,13 @@ class HeadSkipContractTest(unittest.TestCase):
             f"{BLACK_DETECT},{FREEZE_DETECT}",
             "blackdetect=d=0.2:pix_th=0.10,freezedetect=n=-55dB:d=1.4",
         )
+        probe = inspect.getsource(edl._probe_spans)
+        self.assertIn("look_chain(look)", probe)
+        self.assertIn("color_convert_filter", probe)
+        self.assertIn("BLACK_DETECT", probe)
+        self.assertIn("FREEZE_DETECT", probe)
+        self.assertNotIn("colorbalance", source)
+        self.assertNotIn("eq=contrast", source)
 
     def test_audio_bed_is_one_pink_noise_constant(self) -> None:
         from edittude_v3.media import render

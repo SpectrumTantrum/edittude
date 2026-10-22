@@ -7,15 +7,16 @@ from pathlib import Path
 
 from edittude_v3.media.core import (
     ASPECTS,
-    LOOKS,
     MediaError,
     ffmpeg,
     ffprobe,
+    look_chain,
     run,
     which,
 )
 from edittude_v3.media.edl import EditDecision, Event
 from edittude_v3.media.inventory import describe_clip
+from edittude_v3.media.qc import _parse_loudness
 from edittude_v3.media.titlecard import write_title_png
 
 
@@ -72,12 +73,22 @@ _COLORSPACE_IALL = {
 _UNTAGGED = {"", "unknown", "unspecified", "none"}
 # Untagged frames below this height are SD (smpte170m). 720 and above are HD (bt709).
 _SD_HEIGHT = 720
-# Delivered loudness. alimiter is a sample-peak limiter; encoded true peak reads
-# hotter than that threshold, so the limit sits 0.5 dB under the -1.5 dBTP ceiling.
+# Delivered loudness. alimiter catches sample peaks, so the ceiling sits at -3.5 dBFS
+# and the limiter runs at 4x sample rate. Encoded true peak is measured after AAC.
 LOUDNESS_I = -16.0
 LOUDNESS_TP = -1.5
 LOUDNESS_LRA = 11.0
-LOUDNESS_SAMPLE_MARGIN = 0.5
+LOUDNESS_LIMIT_DB = -3.5
+# Picture bed under neighbouring audio, after the one program gain. A file that is
+# only the bed keeps the program target instead. The aim is -35, pulled down when
+# a neighbour would otherwise sit under 12 LU above the bed, and clamped so the
+# one post-encode trim still leaves the bed inside -40 to -30.
+BED_LUFS = -35.0
+BED_CLEARANCE = 12.0
+BED_MIN = -37.5
+BED_MAX = -33.0
+# Existing amb duck ahead of a voiceover. The linear gain is measured after it.
+_AMB_LINEAR = 0.16
 
 
 def _colorspace_name(value: object) -> str | None:
@@ -367,8 +378,7 @@ def mix(
 
 
 def grade(video: Path, out: Path, look: str = "warm") -> Path:
-    vf = LOOKS.get(look) or LOOKS["warm"]
-    return _video_filter(video, out, vf)
+    return _video_filter(video, out, look_chain(look))
 
 
 def titles(
@@ -464,7 +474,7 @@ def finish(
     """One encode: grade, title, mix. Avoids stacking generations."""
     if not picture.is_file():
         raise MediaError(f"missing picture {picture}")
-    look = LOOKS.get(edl.look) or LOOKS["warm"]
+    look = look_chain(edl.look)
     vo = Path(voiceover) if voiceover else (Path(edl.voiceover) if edl.voiceover else None)
     mus = Path(music) if music else (Path(edl.music) if edl.music else None)
     inputs = ["-i", str(picture)]
@@ -499,7 +509,7 @@ def finish(
     mix_labels: list[str] = []
     audio_filters: list[str] = []
     if picture_meta.get("has_audio"):
-        audio_filters.append("[0:a]volume=0.16[amb]")
+        audio_filters.append(f"[0:a]volume={_AMB_LINEAR:g}[amb]")
         mix_labels.append("[amb]")
     if vo and vo.is_file():
         inputs += ["-i", str(vo)]
@@ -513,6 +523,10 @@ def finish(
         inputs += ["-i", str(mus)]
         audio_filters.append(f"[{next_index}:a]volume=0.08,aformat=channel_layouts=stereo[mus]")
         mix_labels.append("[mus]")
+    out.parent.mkdir(parents=True, exist_ok=True)
+    fps = int(edl.fps or 30) or 30
+    frames = _video_frame_count(picture, fps)
+    seconds = frames / fps
     if mix_labels:
         if len(mix_labels) == 1:
             pre_filters = audio_filters
@@ -524,18 +538,286 @@ def finish(
                 "dropout_transition=0.4[pre]",
             ]
             pre_label = "[pre]"
-        loud = _limiting_loudnorm(_audio_inputs(picture, vo, mus), _measure_filters(
-            picture_meta.get("has_audio"), vo, mus,
-        ))
-        filters.extend([
-            *pre_filters,
-            f"{pre_label}{loud},aformat=sample_rates=48000:channel_layouts=stereo[a]",
-        ])
-        map_audio = ["-map", "[a]"]
+        stats = _measure_program(
+            _audio_inputs(picture, vo, mus),
+            _measure_filters(picture_meta.get("has_audio"), vo, mus),
+        )
+        gain = None if stats is None else LOUDNESS_I - stats["input_i"]
+        if gain is None or not picture_meta.get("has_audio"):
+            bed_extra, bed_spans, bed_target = 0.0, [], None
+        else:
+            bed_extra, bed_spans, bed_target = _bed_makeup(picture, edl, gain)
+        if gain is not None:
+            line = f"finish gain {gain:.2f} dB"
+            if bed_spans and bed_target is not None:
+                line += f"; bed {bed_extra:.2f} dB at {bed_target:.1f} LUFS"
+            print(line, flush=True)
+        trim = 0.0
+        for attempt in range(2):
+            # The corrective trim is another volume on the whole program. Take it
+            # back off the bed so that trim does not walk the bed out of its window
+            # or close the gap to a quiet neighbour.
+            delivered = _with_bed(pre_filters, bed_extra - trim, bed_spans)
+            chain = _linear_chain(gain, trim, seconds)
+            _encode_finish(
+                inputs,
+                [
+                    *filters,
+                    *delivered,
+                    f"{pre_label}{chain},aformat=sample_rates=48000:channel_layouts=stereo[a]",
+                ],
+                video_out,
+                ["-map", "[a]"],
+                frames,
+                out,
+            )
+            if attempt == 1:
+                break
+            reading = _encoded_loudness(out)
+            trim = _corrective_trim(reading.get("I"), reading.get("TP"))
+            if trim is None:
+                break
+            peak = reading.get("TP")
+            integrated = reading.get("I")
+            if trim < 0:
+                print(
+                    f"true peak {peak:.2f} dBTP over {LOUDNESS_TP:g}; retry {trim:.2f} dB",
+                    flush=True,
+                )
+            else:
+                print(
+                    f"integrated {integrated:.2f} LUFS; retry {trim:.2f} dB",
+                    flush=True,
+                )
     else:
-        map_audio = []
-    out.parent.mkdir(parents=True, exist_ok=True)
-    frames = _video_frame_count(picture, int(edl.fps or 30))
+        _encode_finish(inputs, filters, video_out, [], frames, out)
+    return out
+
+
+def _audio_inputs(picture: Path, vo: Path | None, mus: Path | None) -> list[str]:
+    inputs = ["-i", str(picture)]
+    if vo and vo.is_file():
+        inputs += ["-i", str(vo)]
+    if mus and mus.is_file():
+        inputs += ["-i", str(mus)]
+    return inputs
+
+
+def _measure_filters(has_picture_audio: bool, vo: Path | None, mus: Path | None) -> tuple[list[str], str]:
+    """Same program the encode loudnorm sees, with audio inputs packed from index 0."""
+    filters: list[str] = []
+    labels: list[str] = []
+    index = 1
+    if has_picture_audio:
+        filters.append(f"[0:a]volume={_AMB_LINEAR:g}[amb]")
+        labels.append("[amb]")
+    if vo and vo.is_file():
+        filters.append(
+            f"[{index}:a]loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g},"
+            "aformat=sample_rates=48000:channel_layouts=stereo[vo]"
+        )
+        labels.append("[vo]")
+        index += 1
+    if mus and mus.is_file():
+        filters.append(f"[{index}:a]volume=0.08,aformat=channel_layouts=stereo[mus]")
+        labels.append("[mus]")
+    if len(labels) == 1:
+        return filters, labels[0]
+    return [
+        *filters,
+        f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:dropout_transition=0.4[pre]",
+    ], "[pre]"
+
+
+def _measure_program(inputs: list[str], measured: tuple[list[str], str]) -> dict[str, float] | None:
+    """Pass 1: integrated loudness of the program the encode gain will see."""
+    pre_filters, pre_label = measured
+    measure = (
+        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:print_format=json"
+    )
+    result = ffmpeg(
+        [
+            *inputs,
+            "-filter_complex",
+            ";".join([*pre_filters, f"{pre_label}{measure}[a]"]),
+            "-map",
+            "[a]",
+            "-f",
+            "null",
+            "-",
+        ],
+        capture=True,
+    )
+    return _loudnorm_stats(result.stderr or "")
+
+
+def _linear_chain(gain: float | None, trim: float, seconds: float) -> str:
+    """One fixed gain, then the true-peak limiter, then pad to the picture length.
+
+    loudnorm linear mode silently falls back to dynamic when the range or the
+    peak will not fit, and that fallback lifts a quiet bed. The gain here is
+    volume only. trim is one corrective pass after the encoded file is measured:
+    negative when true peak is over the ceiling, positive when the limiter held
+    the program down and the encoded peak still has room.
+    """
+    decibels = 0.0 if gain is None else gain
+    parts = [f"volume={decibels:.2f}dB", _true_peak_limiter()]
+    if abs(trim) >= 0.05:
+        parts.append(f"volume={trim:.2f}dB")
+    parts.append(
+        "asetpts=PTS-STARTPTS,"
+        f"apad=whole_dur={seconds:.6f},atrim=end={seconds:.6f},asetpts=PTS-STARTPTS"
+    )
+    return ",".join(parts)
+
+
+def _corrective_trim(integrated: float | None, peak: float | None) -> float | None:
+    """One adjustment after the encoded measure. None leaves the file as encoded."""
+    if peak is not None and math.isfinite(peak) and peak > LOUDNESS_TP:
+        # A trim under about 1 dB can raise the AAC true peak. Step by at
+        # least 1.5 dB and aim at -3 so the re-encode stays under the ceiling.
+        return min(-1.5, -3.0 - peak)
+    if (
+        integrated is not None
+        and peak is not None
+        and math.isfinite(integrated)
+        and math.isfinite(peak)
+        and integrated < LOUDNESS_I - 0.4
+        and peak <= -3.0
+    ):
+        boost = min(LOUDNESS_I - integrated, -2.5 - peak, 4.0)
+        if boost >= 0.05:
+            return boost
+    return None
+
+
+def _true_peak_limiter() -> str:
+    """Sample-peak ceiling at 4x rate. alimiter does not see inter-sample peaks."""
+    limit = 10 ** (LOUDNESS_LIMIT_DB / 20)
+    return (
+        "aresample=192000,"
+        f"alimiter=limit={limit:.6f}:level=false:attack=5:release=50:latency=true,"
+        "aresample=48000"
+    )
+
+
+def _with_bed(
+    filters: list[str],
+    extra: float,
+    spans: list[tuple[float, float]],
+) -> list[str]:
+    if not spans or abs(extra) < 0.05:
+        return list(filters)
+    enable = "+".join(f"between(t\\,{start:.6f}\\,{end:.6f})" for start, end in spans)
+    needle = f"volume={_AMB_LINEAR:g}[amb]"
+    insert = f"volume={_AMB_LINEAR:g},volume={extra:.2f}dB:enable='{enable}'[amb]"
+    return [item.replace(needle, insert) if needle in item else item for item in filters]
+
+
+def _bed_makeup(
+    picture: Path,
+    edl: EditDecision,
+    gain: float,
+) -> tuple[float, list[tuple[float, float]], float | None]:
+    """Extra gain so a bed lands on its target. Omitted when the file is only a bed."""
+    spans, neighbours = _timeline_ranges(edl)
+    if not spans or not neighbours:
+        return 0.0, [], None
+    weighted: list[tuple[float, float]] = []
+    for start, end in spans:
+        measured = _span_integrated(picture, start, end)
+        if measured is None:
+            measured = -45.0
+        weighted.append((end - start, measured))
+    total = sum(weight for weight, _level in weighted)
+    if total <= 0:
+        return 0.0, [], None
+    bed_i = sum(weight * level for weight, level in weighted) / total
+    quietest: float | None = None
+    for start, end in neighbours:
+        measured = _span_integrated(picture, start, end)
+        if measured is None:
+            continue
+        quietest = measured if quietest is None else min(quietest, measured)
+    target = _bed_target(quietest, gain)
+    amb = 20.0 * math.log10(_AMB_LINEAR)
+    extra = target - bed_i - amb - gain
+    if abs(extra) < 0.05:
+        extra = 0.0
+    return extra, spans, target
+
+
+def _bed_target(quietest: float | None, gain: float) -> float:
+    """Bed level after the program gain. -35, or lower so the quiet neighbour stays 12 LU up."""
+    target = BED_LUFS
+    if quietest is not None and math.isfinite(quietest) and math.isfinite(gain):
+        amb = 20.0 * math.log10(_AMB_LINEAR)
+        predicted = quietest + amb + gain
+        target = min(target, predicted - BED_CLEARANCE)
+    if not math.isfinite(target):
+        target = BED_LUFS
+    return min(BED_MAX, max(BED_MIN, target))
+
+
+def _timeline_ranges(
+    edl: EditDecision,
+) -> tuple[list[tuple[float, float]], list[tuple[float, float]]]:
+    """Bed spans and neighbour spans on the assembled frame grid."""
+    fps = int(edl.fps or 30) or 30
+    spans: list[tuple[float, float]] = []
+    neighbours: list[tuple[float, float]] = []
+    cursor = 0.0
+    for event in edl.events:
+        frames = max(1, round(event.duration() * fps))
+        dur = frames / fps
+        if event.audio == "bed":
+            spans.append((cursor, cursor + dur))
+        else:
+            neighbours.append((cursor, cursor + dur))
+        cursor += dur
+    return spans, neighbours
+
+
+def _span_integrated(path: Path, start: float, end: float) -> float | None:
+    if end - start < 0.4:
+        return None
+    result = ffmpeg(
+        [
+            "-i",
+            str(path),
+            "-af",
+            (
+                f"atrim=start={start:.6f}:end={end:.6f},asetpts=PTS-STARTPTS,"
+                f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:print_format=json"
+            ),
+            "-f",
+            "null",
+            "-",
+        ],
+        capture=True,
+    )
+    stats = _loudnorm_stats(result.stderr or "")
+    if stats is None:
+        return None
+    return stats["input_i"]
+
+
+def _encoded_loudness(path: Path) -> dict[str, float | None]:
+    result = ffmpeg(
+        ["-i", str(path), "-af", "ebur128=peak=true", "-f", "null", "-"],
+        capture=True,
+    )
+    return _parse_loudness((result.stderr or "") + (result.stdout or ""))
+
+
+def _encode_finish(
+    inputs: list[str],
+    filters: list[str],
+    video_out: str,
+    map_audio: list[str],
+    frames: int,
+    out: Path,
+) -> None:
     ffmpeg(
         [
             *inputs,
@@ -575,93 +857,9 @@ def finish(
             str(out),
         ]
     )
-    return out
 
 
-def _audio_inputs(picture: Path, vo: Path | None, mus: Path | None) -> list[str]:
-    inputs = ["-i", str(picture)]
-    if vo and vo.is_file():
-        inputs += ["-i", str(vo)]
-    if mus and mus.is_file():
-        inputs += ["-i", str(mus)]
-    return inputs
-
-
-def _measure_filters(has_picture_audio: bool, vo: Path | None, mus: Path | None) -> tuple[list[str], str]:
-    """Same program the encode loudnorm sees, with audio inputs packed from index 0."""
-    filters: list[str] = []
-    labels: list[str] = []
-    index = 1
-    if has_picture_audio:
-        filters.append("[0:a]volume=0.16[amb]")
-        labels.append("[amb]")
-    if vo and vo.is_file():
-        filters.append(
-            f"[{index}:a]loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g},"
-            "aformat=sample_rates=48000:channel_layouts=stereo[vo]"
-        )
-        labels.append("[vo]")
-        index += 1
-    if mus and mus.is_file():
-        filters.append(f"[{index}:a]volume=0.08,aformat=channel_layouts=stereo[mus]")
-        labels.append("[mus]")
-    if len(labels) == 1:
-        return filters, labels[0]
-    return [
-        *filters,
-        f"{''.join(labels)}amix=inputs={len(labels)}:duration=first:dropout_transition=0.4[pre]",
-    ], "[pre]"
-
-
-def _alimiter() -> str:
-    """Lookahead sample-peak ceiling, 0.5 dB under the delivered true-peak target.
-
-    Attack and release stay short so a peak does not hold the program down.
-    Encoded true peak reads hotter than the sample limit, hence the margin.
-    """
-    decibels = LOUDNESS_TP - LOUDNESS_SAMPLE_MARGIN
-    limit = 10 ** (decibels / 20)
-    return f"alimiter=limit={limit:.6f}:level=false:attack=0.1:release=5"
-
-
-def _limiting_loudnorm(inputs: list[str], measured: tuple[list[str], str]) -> str:
-    """Apply the measured loudness trim, then limit peaks to the ceiling.
-
-    One loudnorm measures the program. Its target_offset is the linear gain
-    that lands integrated loudness on the target. A second dynamic pass does
-    not honour that gain: ffmpeg applies it as a pure gain only in linear
-    mode, and linear mode stays off when the peak or the range will not fit.
-    The trim is applied after the same loudnorm, and the limiter holds peaks
-    that the trim would push through the ceiling.
-    """
-    pre_filters, pre_label = measured
-    measure = (
-        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:print_format=json"
-    )
-    result = ffmpeg(
-        [
-            *inputs,
-            "-filter_complex",
-            ";".join([*pre_filters, f"{pre_label}{measure}[a]"]),
-            "-map",
-            "[a]",
-            "-f",
-            "null",
-            "-",
-        ],
-        capture=True,
-    )
-    stats = _loudnorm_stats(result.stderr or "")
-    if stats is None:
-        # Digital silence has no finite loudness. Leave it alone; QC still flags it.
-        return "volume=1"
-    return (
-        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g},"
-        f"volume={stats['target_offset']}dB,{_alimiter()}"
-    )
-
-
-def _loudnorm_stats(stderr: str) -> dict[str, str] | None:
+def _loudnorm_stats(stderr: str) -> dict[str, float] | None:
     matches = re.findall(r'\{\s*"input_i".*?\}', stderr, re.S)
     if not matches:
         return None
@@ -674,7 +872,7 @@ def _loudnorm_stats(stderr: str) -> dict[str, str] | None:
         return None
     if not all(math.isfinite(value) for value in values.values()):
         return None
-    return {key: f"{value:.2f}" for key, value in values.items()}
+    return values
 
 
 def _video_frame_count(path: Path, fps: int) -> int:

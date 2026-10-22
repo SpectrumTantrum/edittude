@@ -153,13 +153,19 @@ class ColorNormalizeTests(unittest.TestCase):
                 final = finish(source, root / "final.mp4", edl=edl)
             encode = "\n".join(commands)
             self.assertIn("print_format=json", encode)
-            self.assertRegex(
-                encode,
-                r"loudnorm=I=-16:TP=-1\.5:LRA=11,volume=-?[0-9.]+dB,alimiter=limit=",
-            )
-            self.assertIn("level=false", encode)
-            self.assertIn("attack=0.1", encode)
-            self.assertIn("release=5", encode)
+            deliveries = [line for line in commands if "libx264" in line]
+            self.assertTrue(deliveries)
+            self.assertLessEqual(len(deliveries), 2)
+            delivery = deliveries[-1]
+            self.assertNotIn("loudnorm", delivery)
+            self.assertRegex(delivery, r"volume=-?\d+(?:\.\d+)?dB")
+            self.assertIn("aresample=192000", delivery)
+            self.assertIn("alimiter=limit=0.668344", delivery)
+            self.assertIn("level=false", delivery)
+            self.assertIn("attack=5", delivery)
+            self.assertIn("release=50", delivery)
+            self.assertIn("latency=true", delivery)
+            self.assertIn("apad=whole_dur=", delivery)
             meter = ffmpeg([
                 "-i", str(final), "-af", "ebur128=peak=true", "-f", "null", "-",
             ], capture=True)

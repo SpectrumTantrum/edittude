@@ -7,7 +7,16 @@ from math import isnan
 from pathlib import Path
 from typing import Any
 
-from edittude_v3.media.core import ASPECTS, LOOKS, MediaError, ffmpeg, ffprobe, read_json, write_json
+from edittude_v3.media.core import (
+    ASPECTS,
+    LOOKS,
+    MediaError,
+    ffmpeg,
+    ffprobe,
+    look_chain,
+    read_json,
+    write_json,
+)
 from edittude_v3.media.qc import BLACK_DETECT, FREEZE_DETECT, SILENCE_DETECT, detector_spans
 
 HANDLE_IN = 0.12
@@ -274,6 +283,7 @@ def first_cut(
     look: str = "warm",
     target: float | None = None,
 ) -> EditDecision:
+    look = look if look in LOOKS else "warm"
     videos = [c for c in inventory.get("clips") or [] if c.get("kind") == "video"]
     videos = sorted(videos, key=lambda c: (c.get("creation_time") or "", c.get("name") or ""))
     voiceover = pick_voiceover(inventory)
@@ -291,13 +301,13 @@ def first_cut(
         src_dur = float(clip.get("duration") or 0)
         if src_dur < 0.4:
             continue
-        chosen = _keep_window(clip)
+        chosen = _keep_window(clip, look)
         if chosen is None:
-            skipped.append({"src": str(clip.get("path") or ""), "reason": SKIPPED_NO_CLEAN})
+            _record_skip(clip, skipped)
             continue
         start, end, ceiling = chosen
         if end <= start:
-            skipped.append({"src": str(clip.get("path") or ""), "reason": SKIPPED_NO_CLEAN})
+            _record_skip(clip, skipped)
             continue
         kept.append((clip, start, end, ceiling))
 
@@ -327,7 +337,7 @@ def first_cut(
         title=title,
         aspect=aspect,
         fit=fit,
-        look=look if look in LOOKS else "warm",
+        look=look,
         voiceover=voiceover["path"] if voiceover else None,
         music=music["path"] if music else None,
         notes=notes,
@@ -437,7 +447,13 @@ class _Span:
     end: float
 
 
-def _keep_window(clip: dict[str, Any]) -> tuple[float, float, float | None] | None:
+def _record_skip(clip: dict[str, Any], skipped: list[dict[str, str]]) -> None:
+    name = str(clip.get("name") or "").strip() or Path(str(clip.get("path") or "")).name or "clip"
+    print(f"{SKIPPED_NO_CLEAN}: {name}", flush=True)
+    skipped.append({"src": str(clip.get("path") or ""), "reason": SKIPPED_NO_CLEAN})
+
+
+def _keep_window(clip: dict[str, Any], look: str = "warm") -> tuple[float, float, float | None] | None:
     """In/out/ceiling for one clip. None drops it: no clean window of MIN_HOLD."""
     src_dur = float(clip.get("duration") or 0)
     screeny = _looks_like_screen(clip)
@@ -445,7 +461,7 @@ def _keep_window(clip: dict[str, Any]) -> tuple[float, float, float | None] | No
     if not path.is_file():
         start, end = _legacy_window(src_dur, screeny)
         return start, end, None
-    spans, rate = _probe_spans(path, clip.get("has_audio") is True)
+    spans, rate = _probe_spans(path, clip.get("has_audio") is True, look, clip)
     spans = _merge_spans(_close_spans(spans, src_dur), rate)
     if not spans:
         start, end = _legacy_window(src_dur, screeny)
@@ -582,12 +598,24 @@ def _advance_origin(spans: list[_Span], rate: Fraction, src_dur: float) -> float
     return origin
 
 
-def _probe_spans(path: Path, has_audio: bool) -> tuple[list[_Span], Fraction]:
+def _probe_spans(
+    path: Path,
+    has_audio: bool,
+    look: str = "warm",
+    clip: dict[str, Any] | None = None,
+) -> tuple[list[_Span], Fraction]:
     rate = _video_rate(ffprobe(path))
     args = ["-i", str(path)]
     if has_audio:
         args += ["-af", SILENCE_DETECT]
-    args += ["-vf", f"{BLACK_DETECT},{FREEZE_DETECT}", "-f", "null", "-"]
+    # Assemble converts into bt709 before finish grades. qc sees that grade,
+    # so the probe runs the same conversion and the same look, then the detectors.
+    from edittude_v3.media.render import color_convert_filter
+
+    convert = color_convert_filter(clip or {}) or ""
+    grade = look_chain(look)
+    chain = f"{convert},{grade}" if convert else grade
+    args += ["-vf", f"{chain},{BLACK_DETECT},{FREEZE_DETECT}", "-f", "null", "-"]
     result = ffmpeg(args, capture=True)
     log = (result.stderr or "") + "\n" + (result.stdout or "")
     found = detector_spans(log)

@@ -42,6 +42,11 @@ LOOKS: dict[str, str] = {
     ),
 }
 
+def look_chain(name: str | None = None) -> str:
+    """Finish grade. first_cut probes through this same chain."""
+    return LOOKS.get(str(name or "")) or LOOKS["warm"]
+
+
 FONT_CANDIDATES = [
     Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
