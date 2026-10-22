@@ -214,7 +214,7 @@ class ColorNormalizeTests(unittest.TestCase):
             commands.append(blob)
             if "reinit_filter" in blob or "h264_metadata" in blob:
                 raise AssertionError(blob)
-            return run([which("ffmpeg"), "-hide_banner", "-y", *args], capture=capture, timeout=seconds)
+            return run([which("ffmpeg"), "-hide_banner", "-nostdin", "-y", *args], capture=capture, timeout=seconds)
 
         return _Patch("edittude_v3.media.render.ffmpeg", limited, original, commands)
 

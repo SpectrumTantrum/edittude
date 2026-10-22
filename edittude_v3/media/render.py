@@ -136,6 +136,11 @@ def color_convert_filter(clip: dict) -> str | None:
     return bt709_colorspace(clip)
 
 
+# One bed for a clip with no audio stream: pink noise at -45 LUFS.
+# Golden tests pin this string. Do not add another noise or level.
+AUDIO_BED = "anoisesrc=color=pink:r=48000:a=1:s=1,loudnorm=I=-45"
+
+
 def assemble(edl: EditDecision, out: Path, work_dir: Path) -> Path:
     if not edl.events:
         raise MediaError("EDL has no events")
@@ -203,11 +208,14 @@ def _encode_event(event: Event, dest: Path, width: int, height: int, fit: str = 
         str(src),
     ]
     if not clip.get("has_audio"):
+        # loudnorm oversamples, so the delivery rate and layout are set after AUDIO_BED.
         args += [
             "-f",
             "lavfi",
+            "-t",
+            f"{duration:.6f}",
             "-i",
-            "anullsrc=channel_layout=stereo:sample_rate=48000",
+            f"{AUDIO_BED},aresample=48000,aformat=sample_rates=48000:channel_layouts=stereo",
         ]
     args += [
         "-t",
@@ -428,7 +436,7 @@ def burn_srt(video: Path, out: Path, srt: Path) -> Path:
     if not srt.is_file():
         raise MediaError(f"missing captions {srt}")
     # Homebrew ffmpeg is often built without libass. Fail clearly.
-    probe = run([which("ffmpeg"), "-hide_banner", "-filters"], capture=True, check=False)
+    probe = run([which("ffmpeg"), "-hide_banner", "-nostdin", "-filters"], capture=True, check=False)
     listing = (probe.stdout or "") + (probe.stderr or "")
     if "subtitles" not in listing:
         raise MediaError(

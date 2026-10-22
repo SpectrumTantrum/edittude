@@ -18,7 +18,7 @@ from tools.media import audio_timing, media_render
 
 def black_columns(path: Path) -> tuple[int, int]:
     """Decoded frame size and how many of its columns are entirely black."""
-    frame = subprocess.run(["ffmpeg", "-v", "error", "-i", path, "-frames:v", "1",
+    frame = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", path, "-frames:v", "1",
                             "-f", "rawvideo", "-pix_fmt", "gray", "-"], capture_output=True, check=True).stdout
     width, height = (int(value) for value in run([
         "ffprobe", "-v", "error", "-select_streams", "v:0", "-show_entries",

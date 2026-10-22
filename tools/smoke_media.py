@@ -103,7 +103,7 @@ for path in (source, final):
 assert frame_hashes[source.name] == frame_hashes[final.name]
 markers = {}
 for path in (extracted, final):
-    data = subprocess.run(["ffmpeg", "-v", "error", "-i", str(path), "-map", "0:a:0",
+    data = subprocess.run(["ffmpeg", "-nostdin", "-v", "error", "-i", str(path), "-map", "0:a:0",
                            "-ar", "48000", "-ac", "1", "-f", "f32le", "-"],
                           check=True, capture_output=True).stdout
     samples = array.array("f", data)

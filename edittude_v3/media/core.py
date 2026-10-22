@@ -156,4 +156,4 @@ def ffprobe(path: Path) -> dict[str, Any]:
 
 
 def ffmpeg(args: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    return run([which("ffmpeg"), "-hide_banner", "-y", *args], capture=capture)
+    return run([which("ffmpeg"), "-hide_banner", "-nostdin", "-y", *args], capture=capture)

@@ -1,17 +1,25 @@
 from __future__ import annotations
 
+import math
 from dataclasses import asdict, dataclass, field, replace
+from fractions import Fraction
 from math import isnan
 from pathlib import Path
 from typing import Any
 
-from edittude_v3.media.core import ASPECTS, LOOKS, MediaError, read_json, write_json
+from edittude_v3.media.core import ASPECTS, LOOKS, MediaError, ffmpeg, ffprobe, read_json, write_json
+from edittude_v3.media.qc import BLACK_DETECT, FREEZE_DETECT, SILENCE_DETECT, detector_spans
 
 HANDLE_IN = 0.12
 HANDLE_OUT = 0.08
 MAX_HOLD = 5.2
 MIN_HOLD = 1.05
 SCREENY_CAP = 4.0
+# Interior detector hits shorter than this stay in the window. Leading hits do not.
+INTERIOR_MIN = 0.5
+SKIPPED_NO_CLEAN = "skipped: no clean window"
+# Detector ends sometimes land a hair past a frame (AAC silence pad). Snap those back.
+_SNAP_SLACK = 0.0002
 
 
 @dataclass
@@ -23,6 +31,7 @@ class Event:
     zoom: float = 1.0
     cx: float = 0.5
     cy: float = 0.5
+    audio: str = ""
 
     def __post_init__(self) -> None:
         for name, default, lower, upper in (
@@ -49,6 +58,8 @@ class Event:
         for name, default in (("zoom", 1.0), ("cx", 0.5), ("cy", 0.5)):
             if getattr(self, name) != default:
                 data[name] = getattr(self, name)
+        if self.audio:
+            data["audio"] = self.audio
         return data
 
     @classmethod
@@ -61,6 +72,7 @@ class Event:
             zoom=data.get("zoom", 1.0),
             cx=data.get("cx", 0.5),
             cy=data.get("cy", 0.5),
+            audio=str(data.get("audio") or ""),
         )
 
 
@@ -97,6 +109,7 @@ class EditDecision:
     canvas_width: int | None = None
     canvas_height: int | None = None
     fit: str = "pad"
+    skipped: list[dict[str, str]] = field(default_factory=list)
 
     def __post_init__(self) -> None:
         if self.fit not in ("pad", "crop"):
@@ -136,7 +149,7 @@ class EditDecision:
         return sum(event.duration() for event in self.events)
 
     def to_dict(self) -> dict[str, Any]:
-        return {
+        data = {
             "version": 1,
             "title": self.title,
             "subtitle": self.subtitle,
@@ -152,11 +165,27 @@ class EditDecision:
             "notes": self.notes,
             "events": [event.to_dict() for event in self.events],
         }
+        if self.skipped:
+            data["skipped"] = self.skipped
+        return data
 
 
 def load_edl(path: Path) -> EditDecision:
     data = read_json(path)
     return edl_from_dict(data)
+
+
+def _skipped_from(raw: Any) -> list[dict[str, str]]:
+    if raw is None:
+        return []
+    if not isinstance(raw, list):
+        raise MediaError("EDL skipped must be a list")
+    skipped = []
+    for index, item in enumerate(raw):
+        if not isinstance(item, dict):
+            raise MediaError(f"EDL skipped {index}: must be an object")
+        skipped.append({"src": str(item.get("src") or ""), "reason": str(item.get("reason") or "")})
+    return skipped
 
 
 def edl_from_dict(data: dict[str, Any]) -> EditDecision:
@@ -190,6 +219,7 @@ def edl_from_dict(data: dict[str, Any]) -> EditDecision:
         voiceover=data.get("voiceover"),
         music=data.get("music"),
         notes=str(data.get("notes") or ""),
+        skipped=_skipped_from(data.get("skipped")),
     )
 
 
@@ -255,28 +285,39 @@ def first_cut(
             total = sum(float(c.get("duration") or 0) for c in videos)
             target = min(60.0, max(12.0, total * 0.72))
 
-    events: list[Event] = []
-    count = len(videos)
-    for index, clip in enumerate(videos):
+    kept: list[tuple[dict[str, Any], float, float, float | None]] = []
+    skipped: list[dict[str, str]] = []
+    for clip in videos:
         src_dur = float(clip.get("duration") or 0)
         if src_dur < 0.4:
             continue
-        start = HANDLE_IN if src_dur > HANDLE_IN + MIN_HOLD else 0.0
-        end = src_dur - HANDLE_OUT if src_dur - HANDLE_OUT > start + MIN_HOLD else src_dur
-        hold = end - start
-        cap = SCREENY_CAP if _looks_like_screen(clip) else MAX_HOLD
-        if hold > cap:
-            end = start + cap
+        chosen = _keep_window(clip)
+        if chosen is None:
+            skipped.append({"src": str(clip.get("path") or ""), "reason": SKIPPED_NO_CLEAN})
+            continue
+        start, end, ceiling = chosen
+        if end <= start:
+            skipped.append({"src": str(clip.get("path") or ""), "reason": SKIPPED_NO_CLEAN})
+            continue
+        kept.append((clip, start, end, ceiling))
+
+    events: list[Event] = []
+    ceilings: list[float | None] = []
+    for index, (clip, start, end, ceiling) in enumerate(kept):
         events.append(
             Event(
                 src=clip["path"],
                 in_point=start,
                 out_point=end,
-                reason=_reason(index, count, clip),
+                reason=_reason(index, len(kept), clip),
+                audio="bed" if clip.get("has_audio") is False else "",
             )
         )
+        ceilings.append(ceiling)
 
-    fit_to_duration(events, target)
+    # No ceiling on a clean cut, so growth stays on the previous path.
+    bounded = ceilings if any(item is not None for item in ceilings) else None
+    fit_to_duration(events, target, bounded)
     notes = (
         "Chronology is the spine. Handles off iPhone starts. "
         "Long holds capped. Picture fitted to voiceover when one exists."
@@ -290,10 +331,15 @@ def first_cut(
         voiceover=voiceover["path"] if voiceover else None,
         music=music["path"] if music else None,
         notes=notes,
+        skipped=skipped,
     )
 
 
-def fit_to_duration(events: list[Event], target: float) -> list[Event]:
+def fit_to_duration(
+    events: list[Event],
+    target: float,
+    ceilings: list[float | None] | None = None,
+) -> list[Event]:
     if not events or target <= 0:
         return events
     current = sum(event.duration() for event in events)
@@ -302,7 +348,7 @@ def fit_to_duration(events: list[Event], target: float) -> list[Event]:
     if current > target:
         _shrink(events, current - target)
     else:
-        _grow(events, target - current)
+        _grow(events, target - current, ceilings)
     return events
 
 
@@ -360,9 +406,13 @@ def _shrink(events: list[Event], excess: float) -> None:
         events.pop(victim)
 
 
-def _grow(events: list[Event], need: float) -> None:
+def _grow(
+    events: list[Event],
+    need: float,
+    ceilings: list[float | None] | None = None,
+) -> None:
     remaining = need
-    for event in events:
+    for index, event in enumerate(events):
         if remaining <= 0.05:
             return
         src = Path(event.src)
@@ -372,11 +422,248 @@ def _grow(events: list[Event], need: float) -> None:
 
         src_dur = float(describe_clip(src)["duration"])
         slack = src_dur - HANDLE_OUT - event.out_point
+        if ceilings is not None and index < len(ceilings) and ceilings[index] is not None:
+            slack = min(slack, ceilings[index] - event.out_point)
         if slack <= 0.05:
             continue
         take = min(slack, remaining)
         event.out_point += take
         remaining -= take
+
+
+@dataclass
+class _Span:
+    start: float
+    end: float
+
+
+def _keep_window(clip: dict[str, Any]) -> tuple[float, float, float | None] | None:
+    """In/out/ceiling for one clip. None drops it: no clean window of MIN_HOLD."""
+    src_dur = float(clip.get("duration") or 0)
+    screeny = _looks_like_screen(clip)
+    path = Path(str(clip.get("path") or ""))
+    if not path.is_file():
+        start, end = _legacy_window(src_dur, screeny)
+        return start, end, None
+    spans, rate = _probe_spans(path, clip.get("has_audio") is True)
+    spans = _merge_spans(_close_spans(spans, src_dur), rate)
+    if not spans:
+        start, end = _legacy_window(src_dur, screeny)
+        return start, end, None
+    origin = _advance_origin(spans, rate, src_dur)
+    blocking = [
+        span
+        for span in spans
+        if span.end > origin + _SNAP_SLACK + 1e-4 and span.end - span.start >= INTERIOR_MIN
+    ]
+    return _choose_window(origin, blocking, rate, src_dur, screeny)
+
+
+def _choose_window(
+    origin: float,
+    blocking: list[_Span],
+    rate: Fraction,
+    src_dur: float,
+    screeny: bool,
+) -> tuple[float, float, float | None] | None:
+    if src_dur - origin <= 1e-3:
+        return None
+    start, end = _head_window(origin, src_dur, screeny)
+    if end <= start:
+        return None
+    hit = next(
+        (span for span in blocking if span.start < end - 1e-4 and span.end > start + 1e-4),
+        None,
+    )
+    if hit is None:
+        if origin > 1e-6 and end - start < MIN_HOLD:
+            return None
+        return start, end, _ceiling_after(end, blocking, rate, src_dur)
+    hit_end = _frame_at_or_after(hit.end, rate)
+    for gap_start, gap_end in _gaps(origin, blocking, rate, src_dur):
+        if gap_start + 1e-4 < hit_end:
+            continue
+        placed = _place_in_gap(gap_start, gap_end, src_dur, screeny)
+        if placed is not None:
+            return placed
+    cut_end = _frame_at_or_before(hit.start, rate)
+    if cut_end > start + 1e-4 and cut_end - start >= MIN_HOLD:
+        return start, cut_end, cut_end
+    return None
+
+
+def _place_in_gap(
+    gap_start: float,
+    gap_end: float,
+    src_dur: float,
+    screeny: bool,
+) -> tuple[float, float, float | None] | None:
+    start, end = _head_window(gap_start, src_dur, screeny)
+    limit = gap_end if gap_end < src_dur - 1e-4 else None
+    if limit is not None and end > limit:
+        end = limit
+    if end <= start or end - start < MIN_HOLD:
+        return None
+    ceiling = limit if limit is not None and limit < src_dur - HANDLE_OUT - 1e-9 else None
+    return start, end, ceiling
+
+
+def _gaps(
+    origin: float,
+    blocking: list[_Span],
+    rate: Fraction,
+    src_dur: float,
+) -> list[tuple[float, float]]:
+    gaps: list[tuple[float, float]] = []
+    cursor = origin
+    for span in blocking:
+        if span.start > cursor + 1e-4:
+            wall = _frame_at_or_before(span.start, rate)
+            if wall > cursor:
+                gaps.append((cursor, wall))
+        nxt = _frame_at_or_after(span.end, rate)
+        if nxt > cursor:
+            cursor = nxt
+    if cursor < src_dur - 1e-4:
+        gaps.append((cursor, src_dur))
+    return gaps
+
+
+def _ceiling_after(
+    end: float,
+    blocking: list[_Span],
+    rate: Fraction,
+    src_dur: float,
+) -> float | None:
+    """Stop growth at the next interior defect, before the handle already would."""
+    for span in blocking:
+        if span.end <= end + 1e-6:
+            continue
+        wall = _frame_at_or_before(span.start, rate)
+        if wall <= end + 1e-6:
+            return end
+        if wall < src_dur - HANDLE_OUT - 1e-9:
+            return wall
+        return None
+    return None
+
+
+def _legacy_window(src_dur: float, screeny: bool) -> tuple[float, float]:
+    start = HANDLE_IN if src_dur > HANDLE_IN + MIN_HOLD else 0.0
+    end = src_dur - HANDLE_OUT if src_dur - HANDLE_OUT > start + MIN_HOLD else src_dur
+    cap = SCREENY_CAP if screeny else MAX_HOLD
+    if end - start > cap:
+        end = start + cap
+    return start, end
+
+
+def _head_window(origin: float, src_dur: float, screeny: bool) -> tuple[float, float]:
+    if origin <= 1e-9:
+        return _legacy_window(src_dur, screeny)
+    remain = src_dur - origin
+    start = origin + HANDLE_IN if remain > HANDLE_IN + MIN_HOLD else origin
+    end = src_dur - HANDLE_OUT if src_dur - HANDLE_OUT > start + MIN_HOLD else src_dur
+    cap = SCREENY_CAP if screeny else MAX_HOLD
+    if end - start > cap:
+        end = start + cap
+    return start, end
+
+
+def _advance_origin(spans: list[_Span], rate: Fraction, src_dur: float) -> float:
+    origin = 0.0
+    frame = _frame(rate)
+    for span in spans:
+        if span.end <= origin + _SNAP_SLACK:
+            continue
+        if span.start <= origin + frame + 1e-4:
+            origin = min(src_dur, _frame_at_or_after(span.end, rate))
+            continue
+        break
+    return origin
+
+
+def _probe_spans(path: Path, has_audio: bool) -> tuple[list[_Span], Fraction]:
+    rate = _video_rate(ffprobe(path))
+    args = ["-i", str(path)]
+    if has_audio:
+        args += ["-af", SILENCE_DETECT]
+    args += ["-vf", f"{BLACK_DETECT},{FREEZE_DETECT}", "-f", "null", "-"]
+    result = ffmpeg(args, capture=True)
+    log = (result.stderr or "") + "\n" + (result.stdout or "")
+    found = detector_spans(log)
+    spans = [_Span(item["start"], item["end"]) for item in found["black"]]
+    spans += [_Span(item["start"], item["end"]) for item in found["freeze"]]
+    if has_audio:
+        spans += [_Span(item["start"], item["end"]) for item in found["silence"]]
+    return spans, rate
+
+
+def _close_spans(spans: list[_Span], src_dur: float) -> list[_Span]:
+    closed: list[_Span] = []
+    for span in spans:
+        if span.start >= src_dur:
+            continue
+        # A missing end is the open-ended form (freeze through EOF), not a zero-length hit.
+        end = src_dur if span.end <= span.start else span.end
+        closed.append(_Span(span.start, min(end, src_dur)))
+    return closed
+
+
+def _merge_spans(spans: list[_Span], rate: Fraction) -> list[_Span]:
+    if not spans:
+        return []
+    frame = _frame(rate)
+    ordered = sorted(spans, key=lambda span: (span.start, span.end))
+    merged = [_Span(ordered[0].start, ordered[0].end)]
+    for span in ordered[1:]:
+        if span.start <= merged[-1].end + frame + 1e-4:
+            merged[-1].end = max(merged[-1].end, span.end)
+            merged[-1].start = min(merged[-1].start, span.start)
+        else:
+            merged.append(_Span(span.start, span.end))
+    return merged
+
+
+def _video_rate(probed: dict[str, Any]) -> Fraction:
+    for stream in probed.get("streams") or []:
+        if stream.get("codec_type") != "video":
+            continue
+        for key in ("avg_frame_rate", "r_frame_rate"):
+            rate = _parse_rate(stream.get(key))
+            if rate > 0:
+                return rate
+    return Fraction(0)
+
+
+def _parse_rate(value: object) -> Fraction:
+    text = str(value or "")
+    if not text or text in {"0/0", "0"}:
+        return Fraction(0)
+    try:
+        rate = Fraction(text)
+    except (ValueError, ZeroDivisionError):
+        return Fraction(0)
+    return rate if rate > 0 else Fraction(0)
+
+
+def _frame(rate: Fraction) -> float:
+    if rate <= 0:
+        return 0.0
+    return float(Fraction(1) / rate)
+
+
+def _frame_at_or_after(t: float, rate: Fraction) -> float:
+    if rate <= 0:
+        return t
+    n = math.ceil((t - _SNAP_SLACK) * float(rate) - 1e-9)
+    return float(Fraction(max(n, 0)) / rate)
+
+
+def _frame_at_or_before(t: float, rate: Fraction) -> float:
+    if rate <= 0:
+        return t
+    n = math.floor(t * float(rate) + 1e-6)
+    return float(Fraction(max(n, 0)) / rate)
 
 
 def _looks_like_screen(clip: dict[str, Any]) -> bool:
