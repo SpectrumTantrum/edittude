@@ -32,8 +32,10 @@ from edittude_v3.media.render import (
     BED_MIN,
     _AMB_LINEAR,
     _bed_target,
+    _next_program_gain,
     assemble,
     finish,
+    segment_frame_counts,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -384,6 +386,27 @@ class HeadSkipPlanTest(unittest.TestCase):
         self.assertLessEqual(target, BED_MAX)
         self.assertAlmostEqual(_bed_target(-5.0, 0.0), BED_LUFS, places=2)
         self.assertEqual(_bed_target(-80.0, 0.0), BED_MIN)
+
+    def test_segment_rounds_sum_to_the_edl_duration(self) -> None:
+        # The E1a holds. Each round() is 1801 frames; the EDL is 60.0s / 1800 frames.
+        durations = [2.967, 27.904, 7.422, 9.588, 12.119]
+        self.assertEqual(round(sum(durations), 3), 60.0)
+        self.assertEqual(sum(max(1, round(item * 30)) for item in durations), 1801)
+        counts = segment_frame_counts(durations, 30)
+        self.assertEqual(sum(counts), 1800)
+        self.assertEqual(counts, [89, 837, 223, 288, 363])
+        self.assertEqual(segment_frame_counts([43.3, 8.7, 4.0, 4.0], 30), [1299, 261, 120, 120])
+
+    def test_makeup_uses_the_limiter_efficiency_on_the_third_pass(self) -> None:
+        kind, gain = _next_program_gain(21.34, 21.34, -17.88, -2.44, None, None)
+        self.assertEqual(kind, "again")
+        self.assertAlmostEqual(gain, 23.22, places=2)
+        kind, gain = _next_program_gain(21.34, 23.22, -16.84, -2.49, -17.88, 21.34)
+        self.assertEqual(kind, "again")
+        self.assertAlmostEqual(gain, 24.74, places=2)
+        kind, gain = _next_program_gain(21.34, 24.74, -15.97, -2.41, -16.84, 23.22)
+        self.assertEqual(kind, "keep")
+        self.assertIsNone(gain)
 
     def test_bed_under_a_neighbour_lands_between_minus_40_and_minus_30(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:

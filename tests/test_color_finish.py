@@ -19,6 +19,7 @@ from edittude_v3.media.render import (
     finish,
     input_colorspace,
     relabel_only,
+    segment_frame_counts,
 )
 
 
@@ -121,7 +122,11 @@ class ColorNormalizeTests(unittest.TestCase):
                 self.assertEqual(stream.get("color_range"), "tv")
                 _assert_bt709(self, segment)
             _assert_bt709(self, final)
-            expected = sum(max(1, round(event.duration() * edl.fps)) for event in edl.events)
+            expected = sum(segment_frame_counts([event.duration() for event in edl.events], edl.fps))
+            self.assertEqual(
+                expected,
+                round(sum(event.duration() for event in edl.events) * edl.fps),
+            )
             self.assertEqual(int(_video(final).get("nb_frames") or 0), expected)
             self.assertEqual(int(_video(picture).get("nb_frames") or 0), expected)
 
@@ -155,12 +160,12 @@ class ColorNormalizeTests(unittest.TestCase):
             self.assertIn("print_format=json", encode)
             deliveries = [line for line in commands if "libx264" in line]
             self.assertTrue(deliveries)
-            self.assertLessEqual(len(deliveries), 2)
+            self.assertLessEqual(len(deliveries), 3)
             delivery = deliveries[-1]
             self.assertNotIn("loudnorm", delivery)
             self.assertRegex(delivery, r"volume=-?\d+(?:\.\d+)?dB")
             self.assertIn("aresample=192000", delivery)
-            self.assertIn("alimiter=limit=0.668344", delivery)
+            self.assertIn("alimiter=limit=0.724436", delivery)
             self.assertIn("level=false", delivery)
             self.assertIn("attack=5", delivery)
             self.assertIn("release=50", delivery)
