@@ -82,7 +82,7 @@ class MediaToolsTests(unittest.TestCase):
         self.assertAlmostEqual(short_mux["duration"], 5, places=5)
         frames = []
         for path in (source, self.root / "final.mp4"):
-            output = run(["ffmpeg", "-v", "error", "-i", path, "-map", "0:v:0", "-f", "framemd5", "-"]).stdout
+            output = run(["ffmpeg", "-nostdin", "-v", "error", "-i", path, "-map", "0:v:0", "-f", "framemd5", "-"]).stdout
             frames.append([line for line in output.splitlines() if not line.startswith("#")])
         self.assertEqual(frames[0], frames[1])
         self.assertEqual(len(frames[0]), 125)

@@ -19,6 +19,7 @@ from edittude_v3.media.render import (
     finish,
     input_colorspace,
     relabel_only,
+    segment_frame_counts,
 )
 
 
@@ -121,7 +122,11 @@ class ColorNormalizeTests(unittest.TestCase):
                 self.assertEqual(stream.get("color_range"), "tv")
                 _assert_bt709(self, segment)
             _assert_bt709(self, final)
-            expected = sum(max(1, round(event.duration() * edl.fps)) for event in edl.events)
+            expected = sum(segment_frame_counts([event.duration() for event in edl.events], edl.fps))
+            self.assertEqual(
+                expected,
+                round(sum(event.duration() for event in edl.events) * edl.fps),
+            )
             self.assertEqual(int(_video(final).get("nb_frames") or 0), expected)
             self.assertEqual(int(_video(picture).get("nb_frames") or 0), expected)
 
@@ -152,23 +157,29 @@ class ColorNormalizeTests(unittest.TestCase):
             with self._timeout(45) as commands:
                 final = finish(source, root / "final.mp4", edl=edl)
             encode = "\n".join(commands)
-            self.assertIn("linear=true", encode)
-            self.assertIn("measured_I=", encode)
-            self.assertIn("measured_LRA=", encode)
-            self.assertIn("measured_TP=", encode)
-            self.assertIn("measured_thresh=", encode)
-            self.assertIn("offset=", encode)
             self.assertIn("print_format=json", encode)
-            self.assertIn("alimiter=limit=", encode)
-            self.assertIn("level=false", encode)
+            deliveries = [line for line in commands if "libx264" in line]
+            self.assertTrue(deliveries)
+            self.assertLessEqual(len(deliveries), 3)
+            delivery = deliveries[-1]
+            self.assertNotIn("loudnorm", delivery)
+            self.assertRegex(delivery, r"volume=-?\d+(?:\.\d+)?dB")
+            self.assertIn("aresample=192000", delivery)
+            self.assertIn("alimiter=limit=0.724436", delivery)
+            self.assertIn("level=false", delivery)
+            self.assertIn("attack=5", delivery)
+            self.assertIn("release=50", delivery)
+            self.assertIn("latency=true", delivery)
+            self.assertIn("apad=whole_dur=", delivery)
             meter = ffmpeg([
                 "-i", str(final), "-af", "ebur128=peak=true", "-f", "null", "-",
             ], capture=True)
             stats = _parse_loudness((meter.stderr or "") + (meter.stdout or ""))
             self.assertIsNotNone(stats["TP"])
             self.assertLessEqual(stats["TP"], LOUDNESS_TP, stats)
-            # Same integrated-loudness window qc already uses. The gate itself stays put.
-            self.assertLessEqual(abs(stats["I"] - LOUDNESS_I), 3.5, stats)
+            # Peak-limited clicks. The trim has to land inside ±0.5 of -16
+            # with the true-peak ceiling still held.
+            self.assertLessEqual(abs(stats["I"] - LOUDNESS_I), 0.5, stats)
 
     def _clip(self, dest: Path, size: str, x264_color: list[str]) -> Path:
         color = ["-x264-params", x264_color[0]] if x264_color else []
@@ -214,7 +225,7 @@ class ColorNormalizeTests(unittest.TestCase):
             commands.append(blob)
             if "reinit_filter" in blob or "h264_metadata" in blob:
                 raise AssertionError(blob)
-            return run([which("ffmpeg"), "-hide_banner", "-y", *args], capture=capture, timeout=seconds)
+            return run([which("ffmpeg"), "-hide_banner", "-nostdin", "-y", *args], capture=capture, timeout=seconds)
 
         return _Patch("edittude_v3.media.render.ffmpeg", limited, original, commands)
 

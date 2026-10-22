@@ -7,6 +7,11 @@ from typing import Any
 from edittude_v3.media.core import ffmpeg, write_json
 from edittude_v3.media.inventory import describe_clip
 
+# One copy of the detector settings. first_cut imports these; do not duplicate them.
+SILENCE_DETECT = "silencedetect=n=-38dB:d=1.2"
+BLACK_DETECT = "blackdetect=d=0.2:pix_th=0.10"
+FREEZE_DETECT = "freezedetect=n=-55dB:d=1.4"
+
 
 def review(video: Path) -> dict[str, Any]:
     if not video.is_file():
@@ -17,9 +22,9 @@ def review(video: Path) -> dict[str, Any]:
             "-i",
             str(video),
             "-af",
-            "silencedetect=n=-38dB:d=1.2,ebur128=peak=true:framelog=verbose",
+            f"{SILENCE_DETECT},ebur128=peak=true:framelog=verbose",
             "-vf",
-            "blackdetect=d=0.2:pix_th=0.10,freezedetect=n=-55dB:d=1.4",
+            f"{BLACK_DETECT},{FREEZE_DETECT}",
             "-f",
             "null",
             "-",
@@ -27,9 +32,10 @@ def review(video: Path) -> dict[str, Any]:
         capture=True,
     )
     log = (result.stderr or "") + "\n" + (result.stdout or "")
-    black = _paired_spans(log, "black_start:", "black_end:")
-    silence = _paired_spans(log, "silence_start:", "silence_end:")
-    freeze = _paired_spans(log, "freeze_start:", "freeze_end:")
+    spans = detector_spans(log)
+    black = spans["black"]
+    silence = spans["silence"]
+    freeze = spans["freeze"]
     loudness = _parse_loudness(log)
     duration = float(meta.get("duration") or 0)
     issues: list[str] = []
@@ -72,6 +78,15 @@ def write_review(video: Path, out: Path) -> dict[str, Any]:
     report = review(video)
     write_json(out, report)
     return report
+
+
+def detector_spans(log: str) -> dict[str, list[dict[str, float]]]:
+    """Black, freeze, and silence spans from one ffmpeg detector log."""
+    return {
+        "black": _paired_spans(log, "black_start:", "black_end:"),
+        "silence": _paired_spans(log, "silence_start:", "silence_end:"),
+        "freeze": _paired_spans(log, "freeze_start:", "freeze_end:"),
+    }
 
 
 def _paired_spans(log: str, start_key: str, end_key: str) -> list[dict[str, float]]:

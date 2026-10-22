@@ -42,6 +42,11 @@ LOOKS: dict[str, str] = {
     ),
 }
 
+def look_chain(name: str | None = None) -> str:
+    """Finish grade. first_cut probes through this same chain."""
+    return LOOKS.get(str(name or "")) or LOOKS["warm"]
+
+
 FONT_CANDIDATES = [
     Path("/System/Library/Fonts/Supplemental/Arial Bold.ttf"),
     Path("/System/Library/Fonts/Supplemental/Arial.ttf"),
@@ -156,4 +161,4 @@ def ffprobe(path: Path) -> dict[str, Any]:
 
 
 def ffmpeg(args: list[str], *, capture: bool = False) -> subprocess.CompletedProcess[str]:
-    return run([which("ffmpeg"), "-hide_banner", "-y", *args], capture=capture)
+    return run([which("ffmpeg"), "-hide_banner", "-nostdin", "-y", *args], capture=capture)
