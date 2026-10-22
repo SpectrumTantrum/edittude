@@ -614,14 +614,26 @@ def _measure_filters(has_picture_audio: bool, vo: Path | None, mus: Path | None)
 
 
 def _alimiter() -> str:
-    """Sample-peak ceiling just under the delivered true-peak target."""
+    """Lookahead sample-peak ceiling, 0.5 dB under the delivered true-peak target.
+
+    Attack and release stay short so a peak does not hold the program down.
+    Encoded true peak reads hotter than the sample limit, hence the margin.
+    """
     decibels = LOUDNESS_TP - LOUDNESS_SAMPLE_MARGIN
     limit = 10 ** (decibels / 20)
-    return f"alimiter=limit={limit:.6f}:level=false"
+    return f"alimiter=limit={limit:.6f}:level=false:attack=0.1:release=5"
 
 
 def _limiting_loudnorm(inputs: list[str], measured: tuple[list[str], str]) -> str:
-    """Two-pass loudnorm, then a sample-peak limiter so dynamic mode still holds the ceiling."""
+    """Apply the measured loudness trim, then limit peaks to the ceiling.
+
+    One loudnorm measures the program. Its target_offset is the linear gain
+    that lands integrated loudness on the target. A second dynamic pass does
+    not honour that gain: ffmpeg applies it as a pure gain only in linear
+    mode, and linear mode stays off when the peak or the range will not fit.
+    The trim is applied after the same loudnorm, and the limiter holds peaks
+    that the trim would push through the ceiling.
+    """
     pre_filters, pre_label = measured
     measure = (
         f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:print_format=json"
@@ -644,10 +656,8 @@ def _limiting_loudnorm(inputs: list[str], measured: tuple[list[str], str]) -> st
         # Digital silence has no finite loudness. Leave it alone; QC still flags it.
         return "volume=1"
     return (
-        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g}:linear=true:"
-        f"measured_I={stats['input_i']}:measured_TP={stats['input_tp']}:"
-        f"measured_LRA={stats['input_lra']}:measured_thresh={stats['input_thresh']}:"
-        f"offset={stats['target_offset']}:print_format=json,{_alimiter()}"
+        f"loudnorm=I={LOUDNESS_I:g}:TP={LOUDNESS_TP:g}:LRA={LOUDNESS_LRA:g},"
+        f"volume={stats['target_offset']}dB,{_alimiter()}"
     )
 
 

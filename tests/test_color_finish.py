@@ -152,23 +152,23 @@ class ColorNormalizeTests(unittest.TestCase):
             with self._timeout(45) as commands:
                 final = finish(source, root / "final.mp4", edl=edl)
             encode = "\n".join(commands)
-            self.assertIn("linear=true", encode)
-            self.assertIn("measured_I=", encode)
-            self.assertIn("measured_LRA=", encode)
-            self.assertIn("measured_TP=", encode)
-            self.assertIn("measured_thresh=", encode)
-            self.assertIn("offset=", encode)
             self.assertIn("print_format=json", encode)
-            self.assertIn("alimiter=limit=", encode)
+            self.assertRegex(
+                encode,
+                r"loudnorm=I=-16:TP=-1\.5:LRA=11,volume=-?[0-9.]+dB,alimiter=limit=",
+            )
             self.assertIn("level=false", encode)
+            self.assertIn("attack=0.1", encode)
+            self.assertIn("release=5", encode)
             meter = ffmpeg([
                 "-i", str(final), "-af", "ebur128=peak=true", "-f", "null", "-",
             ], capture=True)
             stats = _parse_loudness((meter.stderr or "") + (meter.stdout or ""))
             self.assertIsNotNone(stats["TP"])
             self.assertLessEqual(stats["TP"], LOUDNESS_TP, stats)
-            # Same integrated-loudness window qc already uses. The gate itself stays put.
-            self.assertLessEqual(abs(stats["I"] - LOUDNESS_I), 3.5, stats)
+            # Peak-limited clicks. The trim has to land inside ±0.5 of -16
+            # with the true-peak ceiling still held.
+            self.assertLessEqual(abs(stats["I"] - LOUDNESS_I), 0.5, stats)
 
     def _clip(self, dest: Path, size: str, x264_color: list[str]) -> Path:
         color = ["-x264-params", x264_color[0]] if x264_color else []
