@@ -26,6 +26,7 @@ edittude ask "make a cut from /path/to/footage"
 edittude skills
 edittude media --help
 edittude update
+edittude doctor
 edittude -C /path/to/project
 ```
 
@@ -42,7 +43,16 @@ uv sync
 uv run edittude
 ```
 
+## Doctor
 
+`edittude doctor` checks the machine a cut will run on. Each line is `OK` or one fix sentence. The process exits 0 only when the required checks are OK: ffmpeg and ffprobe on `PATH`, the libx264 and aac encoders, and the `loudnorm` and `alimiter` filters. It does not use the network.
+
+```bash
+edittude doctor
+edittude doctor --json
+```
+
+The ffmpeg version is printed. Older than 7.1 is a warning, not a failure. ffprobe's version is printed the same way and does not carry that warning. libopus and libtheora are warnings when they are missing. A DeepSeek key is present when `DEEPSEEK_API_KEY` is set or when `~/.config/edittude/.env` (or the legacy config file the app already reads) holds one. The command never prints the key. A missing key is a warning and does not change the exit code. Optional models use the same offline status as `edittude media models install --check`; a missing model is a warning. Free disk is reported for the cache (`EDITTUDE_CACHE_DIR`, or `$XDG_CACHE_HOME/edittude`, or `~/.cache/edittude`) and for the footage directory. There is no footage path in config, so that check uses `-C` when you pass it and otherwise the current directory, and the line says so. Python, uv, and CUDA are extra info lines and never change the exit code. `--json` prints the same checks. `"ok"` is false only when a required check failed.
 
 ## Media tools
 

@@ -415,8 +415,12 @@ def image_describe(workspace: Path, image_paths: list[str], question: str) -> di
     return {"model": model, "images": len(image_paths), "description": description.strip()}
 
 
-def capabilities() -> dict:
-    """Discover executables/configuration without importing models or downloading weights."""
+def capabilities(*, probe_vision: bool = True) -> dict:
+    """Discover executables/configuration without importing models or downloading weights.
+
+    The vision endpoint is the only network this function opens. Pass
+    probe_vision=False to stay offline; model backends are still local checks.
+    """
     result = {}
     modules = {"ASR": "faster_whisper", "DEMUCS": "demucs", "DIFFSINGER": "torch", "SEED_VC": "torch"}
     runtimes, errors = {}, {}
@@ -461,12 +465,15 @@ def capabilities() -> dict:
                         "reason": reason or "Package/configuration found; required cached model assets are checked at invocation",
                         "model_weights": "unverified", "downloads": False}
     url, model = _vision()
-    try:
-        with urllib.request.urlopen(f"{url}/models", timeout=2) as response:  # noqa: S310
-            served = [item["id"] for item in json.load(response)["data"]]
-        reason = None if model in served else f"{model} is not served at {url}; it serves {served}"
-    except (OSError, ValueError, KeyError) as error:
-        reason = f"No vision model at {url} ({error})"
+    if not probe_vision:
+        reason = "vision endpoint not probed"
+    else:
+        try:
+            with urllib.request.urlopen(f"{url}/models", timeout=2) as response:  # noqa: S310
+                served = [item["id"] for item in json.load(response)["data"]]
+            reason = None if model in served else f"{model} is not served at {url}; it serves {served}"
+        except (OSError, ValueError, KeyError) as error:
+            reason = f"No vision model at {url} ({error})"
     result["image_describe"] = {"status": "unavailable" if reason else "configured", "url": url,
                                 "model": model, "reason": reason or "Endpoint serves the model"}
     engine = shutil.which("say") or shutil.which("espeak-ng") or shutil.which("espeak")
