@@ -1,0 +1,45 @@
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v10.3.2
+        with:
+          enable-cache: true
+          python-version: "3.13"
+
+      - name: Install ffmpeg
+        run: |
+          # apt-daily often holds the lock on a fresh runner and apt-get waits with no exit.
+          sudo systemctl stop apt-daily.service apt-daily-upgrade.service || true
+          sudo systemctl kill --kill-who=all apt-daily.service apt-daily-upgrade.service || true
+          for _ in $(seq 1 30); do
+            sudo fuser /var/lib/dpkg/lock-frontend /var/lib/apt/lists/lock >/dev/null 2>&1 || break
+            echo "waiting for apt lock"
+            sleep 2
+          done
+          sudo DEBIAN_FRONTEND=noninteractive apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y ffmpeg
+
+      - name: ffmpeg version
+        run: ffmpeg -version
+
+      - name: Install the project
+        run: uv sync --frozen
+
+      - name: Test
+        run: uv run --offline python -m unittest discover -s tests
