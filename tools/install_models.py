@@ -293,13 +293,28 @@ def install(names: list[str]) -> None:
             _snapshot(entry, models_root() / entry["into"])
 
 
-def check(names: list[str]) -> int:
-    reported = capabilities()
-    failed = 0
-    for name in names:
+def model_status(
+    names: list[str] | None = None, *, probe_vision: bool = True
+) -> list[tuple[str, str, str]]:
+    """Rows `models install --check` prints: backend name, status, reason.
+
+    probe_vision=False skips the vision URL inside capabilities(). Model
+    backends stay local file and import checks.
+    """
+    chosen = list(BACKENDS) if names is None else list(names)
+    reported = capabilities(probe_vision=probe_vision)
+    rows: list[tuple[str, str, str]] = []
+    for name in chosen:
         status = reported[BACKENDS[name]["tool"]]
-        print(f"{name:12} {status['status']:12} {status['reason']}")
-        failed += status["status"] != "configured"
+        rows.append((name, str(status["status"]), str(status["reason"])))
+    return rows
+
+
+def check(names: list[str]) -> int:
+    failed = 0
+    for name, status, reason in model_status(names):
+        print(f"{name:12} {status:12} {reason}")
+        failed += status != "configured"
     return int(bool(failed))
 
 
