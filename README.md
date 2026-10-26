@@ -26,6 +26,7 @@ edittude ask "make a cut from /path/to/footage"
 edittude skills
 edittude media --help
 edittude update
+edittude doctor
 edittude -C /path/to/project
 ```
 
@@ -42,7 +43,16 @@ uv sync
 uv run edittude
 ```
 
+## Doctor
 
+`edittude doctor` checks the machine a cut will run on. It prints one `pass`, `warn`, `fail`, or `info` line per check and exits non-zero when any check fails. A warning does not fail the command. Every failure and warning ends with a one-line `hint:`.
+
+```bash
+edittude doctor
+edittude doctor --json
+```
+
+ffmpeg and ffprobe must be on `PATH`. A version below 7.1 is a warning. libx264, aac, and libopus are required encoders. libtheora is optional and only warns when it is missing. The command also reports the Python and uv versions, whether the temp directory and the cache directory (`EDITTUDE_CACHE_DIR`, or `$XDG_CACHE_HOME/edittude`, or `~/.cache/edittude`) are writable, and free disk on that cache. Missing ASR, Demucs, Seed-VC, and DiffSinger caches warn; they are optional. A CUDA device, or the lack of one, is `info` only. `--json` prints the same checks as JSON with `"ok": false` when a check failed.
 
 ## Media tools
 

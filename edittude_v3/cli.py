@@ -47,6 +47,7 @@ examples:
   {APP_NAME} media inventory DIR --out inventory.json
   {APP_NAME} -C /path/to/project               session in another folder
   {APP_NAME} update                            pull the latest install
+  {APP_NAME} doctor                            check ffmpeg, disk, and models
 
 session:
   enter send    / commands    @ files    esc interrupt    ctrl+d quit
@@ -119,6 +120,9 @@ def _parser() -> argparse.ArgumentParser:
         action="store_true",
         help="overwrite local changes in the install checkout",
     )
+
+    doctor = sub.add_parser("doctor", help="check ffmpeg, python, disk, and models")
+    doctor.add_argument("--json", action="store_true", help="print machine-readable JSON")
 
     return parser
 
@@ -317,6 +321,15 @@ def main(argv: list[str] | None = None) -> None:
         return
     if args.command == "update":
         cmd_update(force=args.force)
+        return
+    if args.command == "doctor":
+        from edittude_v3.doctor import collect_checks, exit_code, format_json, format_text
+
+        checks = collect_checks()
+        sys.stdout.write(format_json(checks) if args.json else format_text(checks))
+        code = exit_code(checks)
+        if code:
+            raise SystemExit(code)
         return
 
     parser.print_help()
