@@ -11,7 +11,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from edittude_v3.agent import API_KEY_ENV, build_agent
-from edittude_v3.cli import guide_offline, main
+from edittude_v3.cli import _NO_KEY_LINE, guide_offline, main
 
 SENTINEL = "sk-doctor-sentinel-9f3c2a7b1e"
 
@@ -141,4 +141,71 @@ class FirstLaunchGuideTest(unittest.TestCase):
                             main(["ask", "make a cut"])
                 client.assert_not_called()
                 tui.assert_not_called()
-                self.assertNotIn(SENTINEL, out.getvalue() + err.getvalue())
+                blob = out.getvalue() + err.getvalue()
+                self.assertNotIn(SENTINEL, blob)
+                self.assertNotIn("DEEPSEEK_API_KEY is missing", blob)
+                self.assertNotIn("Traceback", blob)
+                self.assertEqual(err.getvalue().count(_NO_KEY_LINE), 2)
+                self.assertEqual(out.getvalue().count("No DeepSeek key yet."), 1)
+
+    def test_every_nokey_launch_prints_one_stderr_line(self):
+        for command in (["chat"], ["ask", "make a cut"]):
+            temporary, home = self._home()
+            with temporary:
+                env = {
+                    API_KEY_ENV: "",
+                    "EDITTUDE_CONFIG_HOME": str(home),
+                    "EDITTUDE_CACHE_DIR": str(home / "cache"),
+                }
+                with patch.dict(os.environ, env, clear=False):
+                    with patch("edittude_v3.cli.sys.stdin.isatty", return_value=False):
+                        first_out, first_err, first_code = self._launch(command)
+                        second_out, second_err, second_code = self._launch(command)
+                self.assertEqual(first_code, 1)
+                self.assertEqual(second_code, 1)
+                self.assertIn("No DeepSeek key yet.", first_out)
+                self.assertIn("https://platform.deepseek.com/api_keys", first_out)
+                self.assertEqual(second_out, "")
+                self.assertEqual(first_err, _NO_KEY_LINE + "\n")
+                self.assertEqual(second_err, _NO_KEY_LINE + "\n")
+                self.assertNotIn("Traceback", first_err + second_err)
+                self.assertNotIn("DEEPSEEK_API_KEY is missing", first_err + second_err)
+                self.assertTrue((home / "offline-guide").is_file())
+
+    def test_media_without_a_key_exits_zero_and_skips_the_block(self):
+        temporary, home = self._home()
+        with temporary:
+            cache = home / "cache"
+            env = {
+                API_KEY_ENV: "",
+                "EDITTUDE_CONFIG_HOME": str(home),
+                "EDITTUDE_CACHE_DIR": str(cache),
+            }
+            with patch.dict(os.environ, env, clear=False):
+                os.environ.pop(API_KEY_ENV, None)
+                with patch("edittude_v3.cli.sys.stdin.isatty", return_value=False):
+                    out, err, code = self._launch(["media", "inventory", "--help"])
+            self.assertEqual(code, 0)
+            blob = out + err
+            self.assertIn("usage: edittude media", blob)
+            self.assertNotIn("No DeepSeek key yet.", blob)
+            self.assertNotIn(_NO_KEY_LINE, blob)
+            self.assertNotIn("platform.deepseek.com/api_keys", blob)
+            self.assertNotIn("edittude doctor", blob)
+            self.assertFalse(list(home.rglob("offline-guide")))
+
+    def _launch(self, argv: list[str]) -> tuple[str, str, int | None]:
+        out = io.StringIO()
+        err = io.StringIO()
+        code: int | None = 0
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            try:
+                main(argv)
+            except SystemExit as exc:
+                if exc.code is None:
+                    code = 0
+                elif isinstance(exc.code, int):
+                    code = exc.code
+                else:
+                    code = 1
+        return out.getvalue(), err.getvalue(), code

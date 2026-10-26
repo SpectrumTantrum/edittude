@@ -144,6 +144,7 @@ def _home(path: Path) -> str:
 _GUIDE_MARKER = "offline-guide"
 # The README names the platform. The keys page itself is not documented there.
 _KEY_PAGE_URL = "https://platform.deepseek.com/api_keys"
+_NO_KEY_LINE = "No DeepSeek key set. Run edittude doctor."
 _OFFLINE_MEDIA = (
     "edittude media inventory FOLDER --out inventory.json",
     "edittude media plan inventory.json --out edl.json",
@@ -200,6 +201,22 @@ def _marker_seen(path: Path) -> bool:
         return False
 
 
+def _refuse_keyless_agent() -> None:
+    """Non-interactive agent launches print one stderr line and exit 1.
+
+    The once-only guidance block is separate. A terminal still falls through
+    to the key prompt. ``SystemExit(1)`` carries no message, so the interpreter
+    does not add a second line or a traceback.
+    """
+    if configured_api_key() or not model_name().startswith("deepseek:"):
+        return
+    if sys.stdin.isatty():
+        return
+    sys.stderr.write(_NO_KEY_LINE + "\n")
+    sys.stderr.flush()
+    raise SystemExit(1)
+
+
 def ensure_api_key() -> None:
     if configured_api_key() or not model_name().startswith("deepseek:"):
         return
@@ -227,6 +244,7 @@ def ensure_api_key() -> None:
 def cmd_chat(*, workspace: Path, thread: str | None) -> None:
     load_env()
     guide_offline()
+    _refuse_keyless_agent()
     ensure_api_key()
     run_tui(workspace=workspace, thread=thread)
 
@@ -268,6 +286,7 @@ async def _ask_async(prompt: str, workspace: Path, thread: str) -> None:
 def cmd_ask(*, workspace: Path, prompt: str, thread: str | None) -> None:
     load_env()
     guide_offline()
+    _refuse_keyless_agent()
     ensure_api_key()
     asyncio.run(_ask_async(prompt, workspace, thread or uuid.uuid4().hex))
 
