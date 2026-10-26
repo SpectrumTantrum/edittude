@@ -142,6 +142,8 @@ def _home(path: Path) -> str:
 
 
 _GUIDE_MARKER = "offline-guide"
+# The README names the platform. The keys page itself is not documented there.
+_KEY_PAGE_URL = "https://platform.deepseek.com/api_keys"
 _OFFLINE_MEDIA = (
     "edittude media inventory FOLDER --out inventory.json",
     "edittude media plan inventory.json --out edl.json",
@@ -155,24 +157,20 @@ _OFFLINE_MEDIA = (
 def guide_offline() -> None:
     """With no key, point at doctor and the key page once, then list offline media.
 
-    The marker lives in the config directory. A missing or unwritable directory
-    does not raise; the block is simply shown again next time.
+    The marker is written in the config directory, or in the cache directory
+    when config cannot be written. An unwritable directory does not raise.
     """
     if configured_api_key() or not model_name().startswith("deepseek:"):
         return
-    marker = config_home() / _GUIDE_MARKER
-    try:
-        seen = marker.is_file()
-    except OSError:
-        seen = False
-    if seen:
+    markers = _guide_markers()
+    if any(_marker_seen(path) for path in markers):
         return
     sys.stdout.write(
         "\n".join(
             (
                 "No DeepSeek key yet.",
                 "Run edittude doctor to check this machine.",
-                f"Get a key at {API_KEY_URL}",
+                f"DeepSeek key page: {_KEY_PAGE_URL}",
                 "Offline media commands:",
                 *(f"  {command}" for command in _OFFLINE_MEDIA),
                 "",
@@ -180,11 +178,26 @@ def guide_offline() -> None:
         )
     )
     sys.stdout.flush()
-    try:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text("shown\n", encoding="utf-8")
-    except OSError:
+    for marker in markers:
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("shown\n", encoding="utf-8")
+        except OSError:
+            continue
         return
+
+
+def _guide_markers() -> list[Path]:
+    from edittude_v3.doctor import cache_dir
+
+    return [config_home() / _GUIDE_MARKER, cache_dir() / _GUIDE_MARKER]
+
+
+def _marker_seen(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
 
 
 def ensure_api_key() -> None:
