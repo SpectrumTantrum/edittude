@@ -47,7 +47,7 @@ examples:
   {APP_NAME} media inventory DIR --out inventory.json
   {APP_NAME} -C /path/to/project               session in another folder
   {APP_NAME} update                            pull the latest install
-  {APP_NAME} doctor                            check ffmpeg, disk, and models
+  {APP_NAME} doctor                            check ffmpeg, disk, models, and the key
 
 session:
   enter send    / commands    @ files    esc interrupt    ctrl+d quit
@@ -121,7 +121,7 @@ def _parser() -> argparse.ArgumentParser:
         help="overwrite local changes in the install checkout",
     )
 
-    doctor = sub.add_parser("doctor", help="check ffmpeg, python, disk, and models")
+    doctor = sub.add_parser("doctor", help="check ffmpeg, disk, models, and the key")
     doctor.add_argument("--json", action="store_true", help="print machine-readable JSON")
 
     return parser
@@ -325,7 +325,13 @@ def main(argv: list[str] | None = None) -> None:
     if args.command == "doctor":
         from edittude_v3.doctor import collect_checks, exit_code, format_json, format_text
 
-        checks = collect_checks()
+        # No footage directory is stored in config. -C is the workspace; otherwise cwd.
+        note = (
+            None
+            if getattr(args, "directory", None) is not None
+            else "cwd; no footage directory configured"
+        )
+        checks = collect_checks(footage=workspace, footage_note=note)
         sys.stdout.write(format_json(checks) if args.json else format_text(checks))
         code = exit_code(checks)
         if code:

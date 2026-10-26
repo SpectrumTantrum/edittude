@@ -1,4 +1,9 @@
-"""Local environment check. Warnings do not fail the process; failures do."""
+"""Local environment check for a cut.
+
+Required checks fail the process: ffmpeg and ffprobe on PATH, libx264, aac,
+and the loudnorm and alimiter filters. Everything else is a warning or info.
+Nothing here opens a network connection.
+"""
 
 from __future__ import annotations
 
@@ -8,7 +13,6 @@ import re
 import shutil
 import subprocess
 import sys
-import tempfile
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,8 +20,10 @@ from pathlib import Path
 FFMPEG_MIN = (7, 1)
 DISK_WARN_BYTES = 1024**3
 _VERSION = re.compile(r"version\s+(\d+)\.(\d+)(?:\.(\d+))?")
-_REQUIRED_ENCODERS = ("libx264", "aac", "libopus")
-_OPTIONAL_ENCODER = "libtheora"
+_REQUIRED_ENCODERS = ("libx264", "aac")
+_OPTIONAL_ENCODERS = ("libopus", "libtheora")
+_REQUIRED_FILTERS = ("loudnorm", "alimiter")
+_NAME_WIDTH = 18
 
 
 @dataclass(frozen=True)
@@ -43,11 +49,13 @@ def collect_checks(
     which: Callable[[str], str | None] = shutil.which,
     run: Callable[..., subprocess.CompletedProcess[str]] | None = None,
     environ: Mapping[str, str] | None = None,
-    temp_dir: Path | None = None,
     cache: Path | None = None,
+    footage: Path | None = None,
+    footage_note: str | None = None,
     disk_usage: Callable[[Path], object] | None = None,
-    model_items: Sequence[tuple[str, bool]] | None = None,
-    python_version: tuple[int, int] | None = None,
+    model_rows: Sequence[tuple[str, str, str]] | None = None,
+    key_present: bool | None = None,
+    python_version: tuple[int, ...] | None = None,
     cuda_message: str | None = None,
 ) -> list[Check]:
     """Run every check. Inject the callables in tests so ffmpeg is not required."""
@@ -55,20 +63,31 @@ def collect_checks(
     spawn = _spawn if run is None else run
     usage = shutil.disk_usage if disk_usage is None else disk_usage
     checks: list[Check] = []
-    ffmpeg = _tool_check("ffmpeg", which, spawn)
-    ffprobe = _tool_check("ffprobe", which, spawn)
+    ffmpeg = _tool_check("ffmpeg", which, spawn, version_floor=True)
+    ffprobe = _tool_check("ffprobe", which, spawn, version_floor=False)
     checks.extend((ffmpeg, ffprobe))
-    checks.extend(_encoder_checks(ffmpeg, which, spawn))
+    checks.extend(
+        _named_tools(
+            ffmpeg, which, spawn, "-encoders", _encoder_names, _REQUIRED_ENCODERS,
+            optional=_OPTIONAL_ENCODERS, kind="encoder",
+        )
+    )
+    checks.extend(
+        _named_tools(
+            ffmpeg, which, spawn, "-filters", _filter_names, _REQUIRED_FILTERS,
+            optional=(), kind="filter",
+        )
+    )
+    checks.append(_key_check(env, key_present))
+    checks.append(_models_check(model_rows))
+    footage_path = footage if footage is not None else Path.cwd()
+    note = footage_note
+    if footage is None and note is None:
+        note = "cwd; no footage directory configured"
+    checks.append(_disk_check("disk-footage", footage_path, usage, note))
+    checks.append(_disk_check("disk-cache", cache if cache is not None else cache_dir(env), usage, None))
     checks.append(_python_check(python_version or sys.version_info[:3]))
     checks.append(_uv_check(which, spawn))
-    temp = temp_dir if temp_dir is not None else Path(tempfile.gettempdir())
-    cache_path = cache if cache is not None else cache_dir(env)
-    checks.append(_writable_check("temp", temp, "set TMPDIR to a writable directory"))
-    checks.append(
-        _writable_check("cache", cache_path, "set EDITTUDE_CACHE_DIR to a writable directory")
-    )
-    checks.append(_disk_check(cache_path, usage))
-    checks.append(_models_check(env, model_items))
     checks.append(Check("cuda", "info", cuda_message if cuda_message is not None else _cuda_message(which, spawn)))
     return checks
 
@@ -78,12 +97,15 @@ def exit_code(checks: Sequence[Check]) -> int:
 
 
 def format_text(checks: Sequence[Check]) -> str:
+    """One line per check: OK, or a single fix sentence for warn and fail."""
     lines: list[str] = []
     for check in checks:
-        line = f"{check.status:<4}  {check.name:<18}  {check.message}"
-        if check.hint and check.status in {"fail", "warn"}:
-            line += f"  hint: {check.hint}"
-        lines.append(line)
+        if check.status in {"fail", "warn"}:
+            lines.append(f"{check.name:<{_NAME_WIDTH}}  {check.hint or check.message}")
+        elif check.message:
+            lines.append(f"{check.name:<{_NAME_WIDTH}}  OK  {check.message}")
+        else:
+            lines.append(f"{check.name:<{_NAME_WIDTH}}  OK")
     return "\n".join(lines) + "\n"
 
 
@@ -113,92 +135,143 @@ def _spawn(args: Sequence[str], timeout: float = 15) -> subprocess.CompletedProc
     )
 
 
+def _fail(name: str, sentence: str) -> Check:
+    return Check(name, "fail", sentence, sentence)
+
+
+def _warn(name: str, sentence: str) -> Check:
+    return Check(name, "warn", sentence, sentence)
+
+
 def _tool_check(
     name: str,
     which: Callable[[str], str | None],
     run: Callable[..., subprocess.CompletedProcess[str]],
+    *,
+    version_floor: bool,
 ) -> Check:
     path = which(name)
     if not path:
-        return Check(name, "fail", "not on PATH", f"install ffmpeg and put {name} on PATH")
+        return _fail(name, f"Install ffmpeg and put {name} on PATH.")
     try:
         result = run([path, "-version"], timeout=15)
     except (OSError, subprocess.TimeoutExpired):
-        return Check(name, "fail", "could not run", f"reinstall ffmpeg so {name} -version works")
+        return _fail(name, f"Reinstall ffmpeg so {name} -version works.")
     text = f"{result.stdout or ''}{result.stderr or ''}"
     if result.returncode != 0:
-        return Check(name, "fail", "could not read the version", f"reinstall ffmpeg so {name} -version works")
+        return _fail(name, f"Reinstall ffmpeg so {name} -version works.")
     parsed = _parse_version(text)
     if parsed is None:
-        return Check(name, "warn", "could not parse the version", "install ffmpeg 7.1 or newer")
+        if version_floor:
+            return _warn(name, "Could not parse the ffmpeg version; install ffmpeg 7.1 or newer.")
+        return Check(name, "pass", "present")
     shown = ".".join(str(part) for part in parsed)
-    if parsed[:2] < FFMPEG_MIN:
-        return Check(
-            name,
-            "warn",
-            f"{shown} is older than 7.1",
-            "install ffmpeg 7.1 or newer",
-        )
+    if version_floor and parsed[:2] < FFMPEG_MIN:
+        return _warn(name, f"ffmpeg {shown} is older than 7.1; install ffmpeg 7.1 or newer.")
     return Check(name, "pass", shown)
 
 
-def _encoder_checks(
+def _named_tools(
     ffmpeg: Check,
     which: Callable[[str], str | None],
     run: Callable[..., subprocess.CompletedProcess[str]],
+    flag: str,
+    parse: Callable[[str], set[str]],
+    required: Sequence[str],
+    *,
+    optional: Sequence[str],
+    kind: str,
 ) -> list[Check]:
     names: set[str] = set()
     available = ffmpeg.status != "fail"
     if available:
         path = which("ffmpeg")
         try:
-            result = run([path or "ffmpeg", "-hide_banner", "-encoders"], timeout=15)
-            names = _encoder_names(f"{result.stdout or ''}{result.stderr or ''}")
+            result = run([path or "ffmpeg", "-hide_banner", flag], timeout=15)
+            names = parse(f"{result.stdout or ''}{result.stderr or ''}")
             if result.returncode != 0:
                 available = False
         except (OSError, subprocess.TimeoutExpired):
             available = False
     checks: list[Check] = []
-    for encoder in _REQUIRED_ENCODERS:
+    for item in required:
+        label = f"{kind}-{item}"
         if not available:
-            checks.append(
-                Check(
-                    f"encoder-{encoder}",
-                    "fail",
-                    "ffmpeg encoders could not be listed",
-                    "install an ffmpeg build with libx264, aac, and libopus",
-                )
-            )
-        elif encoder in names:
-            checks.append(Check(f"encoder-{encoder}", "pass", encoder))
+            checks.append(_fail(label, _tool_sentence(kind, item)))
+        elif item in names:
+            checks.append(Check(label, "pass", item))
         else:
-            checks.append(
-                Check(
-                    f"encoder-{encoder}",
-                    "fail",
-                    f"{encoder} is not available",
-                    "install an ffmpeg build with libx264, aac, and libopus",
-                )
-            )
-    if not available or _OPTIONAL_ENCODER not in names:
-        checks.append(
-            Check(
-                f"encoder-{_OPTIONAL_ENCODER}",
-                "warn",
-                f"{_OPTIONAL_ENCODER} is not available",
-                "install an ffmpeg build with libtheora to inventory .ogv files",
-            )
-        )
-    else:
-        checks.append(Check(f"encoder-{_OPTIONAL_ENCODER}", "pass", _OPTIONAL_ENCODER))
+            checks.append(_fail(label, _tool_sentence(kind, item)))
+    for item in optional:
+        label = f"{kind}-{item}"
+        if not available or item not in names:
+            checks.append(_warn(label, _tool_sentence(kind, item)))
+        else:
+            checks.append(Check(label, "pass", item))
     return checks
+
+
+def _tool_sentence(kind: str, item: str) -> str:
+    if kind == "filter":
+        return f"Install an ffmpeg build that provides the {item} filter."
+    if item == "libtheora":
+        return "Install an ffmpeg build with libtheora to inventory .ogv files."
+    return f"Install an ffmpeg build with {item}."
+
+
+def _key_check(environ: Mapping[str, str], present: bool | None) -> Check:
+    from edittude_v3.agent import API_KEY_ENV
+    from edittude_v3.paths import env_file
+
+    if present is None:
+        present = _key_is_present(environ)
+    if present:
+        return Check("key", "info", "present")
+    sentence = f"Set {API_KEY_ENV} or add it to {env_file()}."
+    return _warn("key", sentence)
+
+
+def _key_is_present(environ: Mapping[str, str]) -> bool:
+    """True when the DeepSeek key is set. The value is never returned."""
+    from edittude_v3.agent import API_KEY_ENV, _key_from_file
+    from edittude_v3.paths import PACKAGE_ROOT, env_file, install_root, legacy_env_file
+
+    if str(environ.get(API_KEY_ENV, "")).strip():
+        return True
+    paths = [env_file()]
+    legacy = legacy_env_file()
+    if legacy is not None:
+        paths.append(legacy)
+    paths.extend((install_root() / ".env", PACKAGE_ROOT / ".env"))
+    for path in paths:
+        try:
+            if bool(_key_from_file(path)):
+                return True
+        except (OSError, UnicodeError):
+            continue
+    return False
+
+
+def _models_check(rows: Sequence[tuple[str, str, str]] | None) -> Check:
+    if rows is None:
+        from tools.install_models import model_status
+
+        rows = model_status(probe_vision=False)
+    missing = [name for name, status, _reason in rows if status != "configured"]
+    if not missing:
+        names = ", ".join(name for name, _status, _reason in rows) or "configured"
+        return Check("models", "pass", names)
+    sentence = (
+        "Optional models are not configured ("
+        + ", ".join(missing)
+        + "); run edittude media models install."
+    )
+    return _warn("models", sentence)
 
 
 def _python_check(version: tuple[int, ...]) -> Check:
     shown = ".".join(str(part) for part in version[:3])
-    if version[:2] < (3, 13):
-        return Check("python", "warn", f"{shown} is older than 3.13", "install Python 3.13 or newer")
-    return Check("python", "pass", shown)
+    return Check("python", "info", shown)
 
 
 def _uv_check(
@@ -207,81 +280,38 @@ def _uv_check(
 ) -> Check:
     path = which("uv")
     if not path:
-        return Check("uv", "warn", "not on PATH", "install uv from https://docs.astral.sh/uv/")
+        return Check("uv", "info", "not on PATH")
     try:
         result = run([path, "--version"], timeout=15)
     except (OSError, subprocess.TimeoutExpired):
-        return Check("uv", "warn", "could not run", "reinstall uv from https://docs.astral.sh/uv/")
+        return Check("uv", "info", "could not run")
     line = (result.stdout or result.stderr or "").strip().splitlines()
     message = line[0].strip() if line else "could not read the version"
-    if result.returncode != 0 or not line:
-        return Check("uv", "warn", message, "reinstall uv from https://docs.astral.sh/uv/")
-    return Check("uv", "pass", message)
+    return Check("uv", "info", message)
 
 
-def _writable_check(name: str, path: Path, hint: str) -> Check:
-    probe = path / ".edittude-doctor"
-    try:
-        path.mkdir(parents=True, exist_ok=True)
-        probe.write_text("ok", encoding="utf-8")
-        probe.unlink()
-    except OSError as exc:
-        detail = exc.strerror or "not writable"
-        return Check(name, "fail", f"{path} is not writable ({detail})", hint)
-    return Check(name, "pass", f"writable {path}")
-
-
-def _disk_check(path: Path, disk_usage: Callable[[Path], object]) -> Check:
+def _disk_check(
+    name: str,
+    path: Path,
+    disk_usage: Callable[[Path], object],
+    note: str | None,
+) -> Check:
     target = path if path.exists() else path.parent
     try:
         usage = disk_usage(target)
         free = int(getattr(usage, "free"))
     except (OSError, TypeError, ValueError, AttributeError):
-        return Check("disk", "fail", f"could not read free space on {target}", "check that the cache directory is on a mounted filesystem")
+        sentence = f"Could not read free space on {target}."
+        return _warn(name, sentence)
     shown = f"{free / 1024**3:.1f} GiB free on {target}"
+    if note:
+        shown = f"{shown} ({note})"
     if free < DISK_WARN_BYTES:
-        return Check("disk", "warn", shown, "free at least 1 GiB on the cache filesystem before rendering")
-    return Check("disk", "pass", shown)
-
-
-def _models_check(
-    environ: Mapping[str, str],
-    model_items: Sequence[tuple[str, bool]] | None,
-) -> Check:
-    items = list(model_items) if model_items is not None else _installed_models(environ)
-    missing = [name for name, present in items if not present]
-    if not missing:
-        return Check("models", "pass", "ASR, Demucs, Seed-VC, and DiffSinger caches are present")
-    names = ", ".join(missing)
-    return Check(
-        "models",
-        "warn",
-        f"missing {names}",
-        "optional: edittude media models install (seed-vc and diffsinger need --models seed-vc,diffsinger)",
-    )
-
-
-def _installed_models(environ: Mapping[str, str]) -> list[tuple[str, bool]]:
-    from tools.common import models_root
-    from tools.models import DEFAULTS
-
-    root = models_root()
-
-    def present(env_name: str, kind: str) -> bool:
-        value = environ.get(env_name)
-        path = Path(value).expanduser() if value else root / DEFAULTS[env_name]
-        return path.is_dir() if kind == "dir" else path.is_file()
-
-    return [
-        ("ASR", present("EDITTUDE_ASR_MODEL_DIR", "dir")),
-        ("Demucs", present("EDITTUDE_DEMUCS_REPO", "dir")),
-        (
-            "Seed-VC",
-            present("EDITTUDE_SEED_VC_DIR", "dir")
-            and present("EDITTUDE_SEED_VC_CHECKPOINT", "file"),
-        ),
-        ("DiffSinger", present("EDITTUDE_DIFFSINGER_DIR", "dir")),
-    ]
+        sentence = f"Free at least 1 GiB on {target} before rendering ({free / 1024**3:.1f} GiB free)."
+        if note:
+            sentence = sentence[:-1] + f"; {note}."
+        return _warn(name, sentence)
+    return Check(name, "pass", shown)
 
 
 def _cuda_message(
@@ -316,5 +346,14 @@ def _encoder_names(text: str) -> set[str]:
     for line in text.splitlines():
         parts = line.split()
         if len(parts) >= 2 and len(parts[0]) == 6 and set(parts[0]) <= set("VASFD."):
+            names.add(parts[1])
+    return names
+
+
+def _filter_names(text: str) -> set[str]:
+    names: set[str] = set()
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 2 and len(parts[0]) == 3 and set(parts[0]) <= set("TSC.") and parts[1] != "=":
             names.add(parts[1])
     return names

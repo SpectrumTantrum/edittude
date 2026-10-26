@@ -45,14 +45,14 @@ uv run edittude
 
 ## Doctor
 
-`edittude doctor` checks the machine a cut will run on. It prints one `pass`, `warn`, `fail`, or `info` line per check and exits non-zero when any check fails. A warning does not fail the command. Every failure and warning ends with a one-line `hint:`.
+`edittude doctor` checks the machine a cut will run on. Each line is `OK` or one fix sentence. The process exits 0 only when the required checks are OK: ffmpeg and ffprobe on `PATH`, the libx264 and aac encoders, and the `loudnorm` and `alimiter` filters. It does not use the network.
 
 ```bash
 edittude doctor
 edittude doctor --json
 ```
 
-ffmpeg and ffprobe must be on `PATH`. A version below 7.1 is a warning. libx264, aac, and libopus are required encoders. libtheora is optional and only warns when it is missing. The command also reports the Python and uv versions, whether the temp directory and the cache directory (`EDITTUDE_CACHE_DIR`, or `$XDG_CACHE_HOME/edittude`, or `~/.cache/edittude`) are writable, and free disk on that cache. Missing ASR, Demucs, Seed-VC, and DiffSinger caches warn; they are optional. A CUDA device, or the lack of one, is `info` only. `--json` prints the same checks as JSON with `"ok": false` when a check failed.
+The ffmpeg version is printed. Older than 7.1 is a warning, not a failure. ffprobe's version is printed the same way and does not carry that warning. libopus and libtheora are warnings when they are missing. A DeepSeek key is present when `DEEPSEEK_API_KEY` is set or when `~/.config/edittude/.env` (or the legacy config file the app already reads) holds one. The command never prints the key. A missing key is a warning and does not change the exit code. Optional models use the same offline status as `edittude media models install --check`; a missing model is a warning. Free disk is reported for the cache (`EDITTUDE_CACHE_DIR`, or `$XDG_CACHE_HOME/edittude`, or `~/.cache/edittude`) and for the footage directory. There is no footage path in config, so that check uses `-C` when you pass it and otherwise the current directory, and the line says so. Python, uv, and CUDA are extra info lines and never change the exit code. `--json` prints the same checks. `"ok"` is false only when a required check failed.
 
 ## Media tools
 
