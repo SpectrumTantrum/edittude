@@ -17,7 +17,6 @@ from rich.table import Table
 
 from edittude_v3 import APP_NAME, __version__
 from edittude_v3.agent import (
-    API_KEY_URL,
     SETTINGS,
     get_settings,
     model_label,
@@ -142,7 +141,7 @@ def _home(path: Path) -> str:
 
 
 _GUIDE_MARKER = "offline-guide"
-# The README names the platform. The keys page itself is not documented there.
+# Guide block and the TTY key prompt both use this page.
 _KEY_PAGE_URL = "https://platform.deepseek.com/api_keys"
 _NO_KEY_LINE = "No DeepSeek key set. Run edittude doctor."
 _OFFLINE_MEDIA = (
@@ -224,7 +223,7 @@ def ensure_api_key() -> None:
         require_api_key()
     console.print()
     console.print(f"[{ACCENT}]◆[/] [bold]{APP_NAME}[/] needs a DeepSeek API key.")
-    console.print(f"[dim]Get one at {API_KEY_URL}[/]")
+    console.print(f"[dim]Get one at {_KEY_PAGE_URL}[/]")
     console.print(f"[dim]It is saved to {escape(_home(env_file()))}[/]")
     console.print()
     while True:
