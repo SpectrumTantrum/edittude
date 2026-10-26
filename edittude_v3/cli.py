@@ -32,7 +32,7 @@ from edittude_v3.agent import (
     save_api_key,
 )
 from edittude_v3.events import iter_turn, preview
-from edittude_v3.paths import env_file, install_root
+from edittude_v3.paths import config_home, env_file, install_root
 from edittude_v3.skills import list_skills
 from edittude_v3.tools import list_tool_names
 from edittude_v3.tui import ACCENT, BLUE, MUTED, ORANGE, RED, TEAL, run_tui
@@ -141,6 +141,52 @@ def _home(path: Path) -> str:
     return str(path).replace(str(Path.home()), "~", 1)
 
 
+_GUIDE_MARKER = "offline-guide"
+_OFFLINE_MEDIA = (
+    "edittude media inventory FOLDER --out inventory.json",
+    "edittude media plan inventory.json --out edl.json",
+    "edittude media assemble edl.json --out picture.mp4",
+    "edittude media finish picture.mp4 edl.json --out final.mp4",
+    "edittude media qc final.mp4 --out qc.json",
+    "edittude media proof FOLDER --out /path/to/artifacts",
+)
+
+
+def guide_offline() -> None:
+    """With no key, point at doctor and the key page once, then list offline media.
+
+    The marker lives in the config directory. A missing or unwritable directory
+    does not raise; the block is simply shown again next time.
+    """
+    if configured_api_key() or not model_name().startswith("deepseek:"):
+        return
+    marker = config_home() / _GUIDE_MARKER
+    try:
+        seen = marker.is_file()
+    except OSError:
+        seen = False
+    if seen:
+        return
+    sys.stdout.write(
+        "\n".join(
+            (
+                "No DeepSeek key yet.",
+                "Run edittude doctor to check this machine.",
+                f"Get a key at {API_KEY_URL}",
+                "Offline media commands:",
+                *(f"  {command}" for command in _OFFLINE_MEDIA),
+                "",
+            )
+        )
+    )
+    sys.stdout.flush()
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text("shown\n", encoding="utf-8")
+    except OSError:
+        return
+
+
 def ensure_api_key() -> None:
     if configured_api_key() or not model_name().startswith("deepseek:"):
         return
@@ -167,6 +213,7 @@ def ensure_api_key() -> None:
 
 def cmd_chat(*, workspace: Path, thread: str | None) -> None:
     load_env()
+    guide_offline()
     ensure_api_key()
     run_tui(workspace=workspace, thread=thread)
 
@@ -207,6 +254,7 @@ async def _ask_async(prompt: str, workspace: Path, thread: str) -> None:
 
 def cmd_ask(*, workspace: Path, prompt: str, thread: str | None) -> None:
     load_env()
+    guide_offline()
     ensure_api_key()
     asyncio.run(_ask_async(prompt, workspace, thread or uuid.uuid4().hex))
 
