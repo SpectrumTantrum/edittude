@@ -17,7 +17,6 @@ from rich.table import Table
 
 from edittude_v3 import APP_NAME, __version__
 from edittude_v3.agent import (
-    API_KEY_URL,
     SETTINGS,
     get_settings,
     model_label,
@@ -32,7 +31,7 @@ from edittude_v3.agent import (
     save_api_key,
 )
 from edittude_v3.events import iter_turn, preview
-from edittude_v3.paths import env_file, install_root
+from edittude_v3.paths import config_home, env_file, install_root
 from edittude_v3.skills import list_skills
 from edittude_v3.tools import list_tool_names
 from edittude_v3.tui import ACCENT, BLUE, MUTED, ORANGE, RED, TEAL, run_tui
@@ -141,6 +140,82 @@ def _home(path: Path) -> str:
     return str(path).replace(str(Path.home()), "~", 1)
 
 
+_GUIDE_MARKER = "offline-guide"
+# Guide block and the TTY key prompt both use this page.
+_KEY_PAGE_URL = "https://platform.deepseek.com/api_keys"
+_NO_KEY_LINE = "No DeepSeek key set. Run edittude doctor."
+_OFFLINE_MEDIA = (
+    "edittude media inventory FOLDER --out inventory.json",
+    "edittude media plan inventory.json --out edl.json",
+    "edittude media assemble edl.json --out picture.mp4",
+    "edittude media finish picture.mp4 edl.json --out final.mp4",
+    "edittude media qc final.mp4 --out qc.json",
+    "edittude media proof FOLDER --out /path/to/artifacts",
+)
+
+
+def guide_offline() -> None:
+    """With no key, point at doctor and the key page once, then list offline media.
+
+    The marker is written in the config directory, or in the cache directory
+    when config cannot be written. An unwritable directory does not raise.
+    """
+    if configured_api_key() or not model_name().startswith("deepseek:"):
+        return
+    markers = _guide_markers()
+    if any(_marker_seen(path) for path in markers):
+        return
+    sys.stdout.write(
+        "\n".join(
+            (
+                "No DeepSeek key yet.",
+                "Run edittude doctor to check this machine.",
+                f"DeepSeek key page: {_KEY_PAGE_URL}",
+                "Offline media commands:",
+                *(f"  {command}" for command in _OFFLINE_MEDIA),
+                "",
+            )
+        )
+    )
+    sys.stdout.flush()
+    for marker in markers:
+        try:
+            marker.parent.mkdir(parents=True, exist_ok=True)
+            marker.write_text("shown\n", encoding="utf-8")
+        except OSError:
+            continue
+        return
+
+
+def _guide_markers() -> list[Path]:
+    from edittude_v3.doctor import cache_dir
+
+    return [config_home() / _GUIDE_MARKER, cache_dir() / _GUIDE_MARKER]
+
+
+def _marker_seen(path: Path) -> bool:
+    try:
+        return path.is_file()
+    except OSError:
+        return False
+
+
+def _refuse_keyless_agent() -> None:
+    """Non-interactive agent launches print one stderr line and exit 1.
+
+    The once-only guidance block is separate. A terminal still falls through
+    to the key prompt. ``SystemExit(1)`` carries no message, so the interpreter
+    does not add a second line or a traceback.
+    """
+    if configured_api_key() or not model_name().startswith("deepseek:"):
+        return
+    if sys.stdin.isatty():
+        return
+    sys.stderr.write(_NO_KEY_LINE + "\n")
+    sys.stderr.flush()
+    raise SystemExit(1)
+
+
 def ensure_api_key() -> None:
     if configured_api_key() or not model_name().startswith("deepseek:"):
         return
@@ -148,7 +223,7 @@ def ensure_api_key() -> None:
         require_api_key()
     console.print()
     console.print(f"[{ACCENT}]◆[/] [bold]{APP_NAME}[/] needs a DeepSeek API key.")
-    console.print(f"[dim]Get one at {API_KEY_URL}[/]")
+    console.print(f"[dim]Get one at {_KEY_PAGE_URL}[/]")
     console.print(f"[dim]It is saved to {escape(_home(env_file()))}[/]")
     console.print()
     while True:
@@ -167,6 +242,8 @@ def ensure_api_key() -> None:
 
 def cmd_chat(*, workspace: Path, thread: str | None) -> None:
     load_env()
+    guide_offline()
+    _refuse_keyless_agent()
     ensure_api_key()
     run_tui(workspace=workspace, thread=thread)
 
@@ -207,6 +284,8 @@ async def _ask_async(prompt: str, workspace: Path, thread: str) -> None:
 
 def cmd_ask(*, workspace: Path, prompt: str, thread: str | None) -> None:
     load_env()
+    guide_offline()
+    _refuse_keyless_agent()
     ensure_api_key()
     asyncio.run(_ask_async(prompt, workspace, thread or uuid.uuid4().hex))
 

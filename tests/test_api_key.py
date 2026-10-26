@@ -89,6 +89,18 @@ class EnsureApiKeyTest(unittest.TestCase):
                     ensure_api_key()
             save.assert_called_once_with("sk-from-prompt")
 
+    def test_tty_prompt_links_the_keys_page(self):
+        with patch.dict(os.environ, {API_KEY_ENV: ""}, clear=False):
+            with (
+                patch("edittude_v3.cli.sys.stdin.isatty", return_value=True),
+                patch("edittude_v3.cli.getpass.getpass", return_value="sk-from-prompt"),
+                patch("edittude_v3.cli.save_api_key"),
+                patch("edittude_v3.cli.console.print") as printed,
+            ):
+                ensure_api_key()
+        shown = " ".join(str(call.args[0]) for call in printed.call_args_list if call.args)
+        self.assertIn("https://platform.deepseek.com/api_keys", shown)
+
     def test_first_launch_writes_config_home_env(self):
         with tempfile.TemporaryDirectory() as temporary:
             home = Path(temporary)
